@@ -9,6 +9,7 @@ import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middlew
 import { AnytypeClient } from "./anytype/client.js";
 import { OwnerOAuthProvider } from "./auth/provider.js";
 import { config } from "./config.js";
+import { renderLandingPage } from "./landing-page.js";
 import { registerTools } from "./tools.js";
 
 const SCOPES = ["anytype"];
@@ -65,6 +66,26 @@ app.use(
     maxAge: "7d",
   }),
 );
+
+const landingPage = renderLandingPage({
+  mcpUrl: config.mcpUrl.href,
+  iconUrl: new URL("/icon-128.png", config.publicUrl).href,
+  version: config.version,
+});
+app.get("/", (_req, res) => {
+  res
+    .set({
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; frame-ancestors 'none'",
+      "Cache-Control": "public, max-age=3600",
+    })
+    .type("html")
+    .send(landingPage);
+});
+
+// Let crawlers index the home page (and its icon) but nothing else.
+app.get("/robots.txt", (_req, res) => {
+  res.type("text/plain").send("User-agent: *\nAllow: /$\nAllow: /favicon.ico\nAllow: /icon\nDisallow: /\n");
+});
 
 app.get("/healthz", (_req, res) => {
   res.json({ ok: true, version: config.version });
