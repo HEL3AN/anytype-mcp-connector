@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.log
+tools/derive-account-key/derive-account-key
+tools/derive-account-key/*.exe
