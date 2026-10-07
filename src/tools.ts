@@ -1,5 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { AnytypeApiError, type AnytypeClient, seg } from "./anytype/client.js";
 
@@ -51,7 +50,7 @@ export function registerTools(server: McpServer, api: AnytypeClient) {
     {
       title: "List spaces",
       description: "List the Anytype spaces this connector can access. Use the returned id as space_id in other tools.",
-      inputSchema: { limit, offset },
+      inputSchema: z.object({ limit, offset }),
       annotations: READ_ONLY,
     },
     ({ limit, offset }) => run(async () => ok((await api.get("/v2/spaces", { limit, offset })).data)),
@@ -70,7 +69,7 @@ Omit space_id to search across all accessible spaces (rows then include space_id
   created_date > daysAgo(7)
 Select/tag values are option names. Operators: = != > < >= <= CONTAINS, NOT CONTAINS, IN, NOT IN, HAS ALL, IS [NOT] EMPTY, EXISTS; combine with AND/OR and parentheses.
 Use anytype_list_types / anytype_list_properties to discover type and property keys.`,
-      inputSchema: {
+      inputSchema: z.object({
         space_id: spaceId.optional(),
         query: z.string().max(4096).optional().describe("Full-text query over names and content"),
         type: z.string().optional().describe("One type key, e.g. page, task, note"),
@@ -89,7 +88,7 @@ Use anytype_list_types / anytype_list_properties to discover type and property k
         fields: z.array(z.string()).max(25).optional().describe("Extra property keys to include per row"),
         limit,
         offset,
-      },
+      }),
       annotations: READ_ONLY,
     },
     ({ space_id, limit, offset, ...body }) =>
@@ -109,12 +108,12 @@ format:
 - "outline": every block's id, type, indent and first 80 chars. Use it to find block ids before editing a large object.
 - "blocks": full AnyBlock JSON (optionally only the subtree of \`block\`). Use for precise block-level edits.
 The returned etag can be passed as if_match to anytype_edit_object.`,
-      inputSchema: {
+      inputSchema: z.object({
         space_id: spaceId,
         object_id: objectId,
         format: z.enum(["markdown", "outline", "blocks"]).optional(),
         block: z.string().optional().describe('Only with format "blocks": return just this block\'s subtree'),
-      },
+      }),
       annotations: READ_ONLY,
     },
     ({ space_id, object_id, format = "markdown", block }) =>
@@ -143,7 +142,7 @@ The returned etag can be passed as if_match to anytype_edit_object.`,
     {
       title: "List object types",
       description: "List object types in a space (key and name). Use the key as `type` when creating or searching.",
-      inputSchema: { space_id: spaceId, limit, offset },
+      inputSchema: z.object({ space_id: spaceId, limit, offset }),
       annotations: READ_ONLY,
     },
     ({ space_id, limit, offset }) =>
@@ -155,7 +154,7 @@ The returned etag can be passed as if_match to anytype_edit_object.`,
     {
       title: "Get object type",
       description: "Get one object type with its properties and templates.",
-      inputSchema: { space_id: spaceId, type: z.string().min(1).describe("Type key, e.g. task") },
+      inputSchema: z.object({ space_id: spaceId, type: z.string().min(1).describe("Type key, e.g. task") }),
       annotations: READ_ONLY,
     },
     ({ space_id, type }) => run(async () => ok((await api.get(`/v2/spaces/${seg(space_id)}/types/${seg(type)}`)).data)),
@@ -167,7 +166,7 @@ The returned etag can be passed as if_match to anytype_edit_object.`,
       title: "List properties",
       description:
         "List properties (fields) defined in a space with their keys and formats. Use the keys in filters, sorts and set_properties.",
-      inputSchema: { space_id: spaceId, limit, offset },
+      inputSchema: z.object({ space_id: spaceId, limit, offset }),
       annotations: READ_ONLY,
     },
     ({ space_id, limit, offset }) =>
@@ -179,7 +178,7 @@ The returned etag can be passed as if_match to anytype_edit_object.`,
     {
       title: "List property options",
       description: "List the options (tags / select values) of a select or multi-select property.",
-      inputSchema: { space_id: spaceId, key: z.string().min(1).describe("Property key"), limit, offset },
+      inputSchema: z.object({ space_id: spaceId, key: z.string().min(1).describe("Property key"), limit, offset }),
       annotations: READ_ONLY,
     },
     ({ space_id, key, limit, offset }) =>
@@ -193,7 +192,7 @@ The returned etag can be passed as if_match to anytype_edit_object.`,
     {
       title: "Get edit operation schema",
       description: "Get the JSON schema and an example for one anytype_edit_object operation.",
-      inputSchema: { op: z.enum(EDIT_OPS) },
+      inputSchema: z.object({ op: z.enum(EDIT_OPS) }),
       annotations: READ_ONLY,
     },
     ({ op }) => run(async () => ok((await api.get(`/v2/schemas/ops/${seg(op)}`)).data)),
@@ -206,7 +205,7 @@ The returned etag can be passed as if_match to anytype_edit_object.`,
       description: `Create an Anytype object (page, note, task, ...) with a markdown body.
 Don't repeat the name as a leading heading in markdown — Anytype shows the name above the body.
 properties maps property keys to values; select/tag values are option names, e.g. {"status": ["In progress"], "due_date": "2026-11-01"}.`,
-      inputSchema: {
+      inputSchema: z.object({
         space_id: spaceId,
         type: z.string().min(1).describe("Type key, e.g. page, note, task"),
         name: z.string().max(4096).optional(),
@@ -215,7 +214,7 @@ properties maps property keys to values; select/tag values are option names, e.g
         template: z.string().optional().describe('Template id, or "none". Omit to use the type\'s default template'),
         create_missing_options: z.boolean().optional().describe("Create select options that don't exist yet"),
         dry_run: z.boolean().optional().describe("Validate without creating"),
-      },
+      }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     ({ space_id, create_missing_options, dry_run, ...body }) =>
@@ -238,7 +237,7 @@ Common ops:
 - {"op":"set_type","type":"task"}
 Other ops: ${EDIT_OPS.join(", ")}. Call anytype_get_op_schema for any op's exact fields.
 Get block ids from anytype_fetch with format "outline". Pass if_match (etag from anytype_fetch) to avoid overwriting concurrent changes.`,
-      inputSchema: {
+      inputSchema: z.object({
         space_id: spaceId,
         object_id: objectId,
         ops: z
@@ -248,7 +247,7 @@ Get block ids from anytype_fetch with format "outline". Pass if_match (etag from
         if_match: z.string().optional().describe("etag the object must still carry"),
         create_missing_options: z.boolean().optional(),
         dry_run: z.boolean().optional().describe("Validate and report without committing"),
-      },
+      }),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     },
     ({ space_id, object_id, ops, if_match, create_missing_options, dry_run }) =>
@@ -271,7 +270,7 @@ Get block ids from anytype_fetch with format "outline". Pass if_match (etag from
       title: "Delete object",
       description:
         "Move an object to the bin. Anytype only allows deleting objects that were created through this connector.",
-      inputSchema: { space_id: spaceId, object_id: objectId, dry_run: z.boolean().optional() },
+      inputSchema: z.object({ space_id: spaceId, object_id: objectId, dry_run: z.boolean().optional() }),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
     ({ space_id, object_id, dry_run }) =>

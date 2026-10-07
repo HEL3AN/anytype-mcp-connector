@@ -26,7 +26,11 @@ for (const t of tools) {
 }
 
 const spaces = await call("anytype_list_spaces");
-const space_id: string = spaces.data[0].id;
+const space_id: string | undefined = process.env.SPACE_ID ?? spaces?.data?.[0]?.id;
+if (!space_id) {
+  console.error("No accessible spaces: check the API key's grants (or set SPACE_ID).");
+  process.exit(1);
+}
 const found = await call("anytype_search", { space_id, query: "", limit: 3 });
 await call("anytype_search", { query: "a", limit: 2 });
 await call("anytype_search", { space_id, filter: "created_date > daysAgo(30)", limit: 2 });

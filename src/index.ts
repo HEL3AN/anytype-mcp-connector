@@ -1,8 +1,9 @@
 import { fileURLToPath } from "node:url";
 import express from "express";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
+import { toNodeHandler } from "@modelcontextprotocol/node";
 import { hostHeaderValidation } from "@modelcontextprotocol/sdk/server/middleware/hostHeaderValidation.js";
+// The v2 SDK only ships resource-server helpers; the OAuth authorization server still comes from v1.
 import { getOAuthProtectedResourceMetadataUrl, mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
 import { AnytypeClient } from "./anytype/client.js";
@@ -44,10 +45,12 @@ app.set("trust proxy", config.trustProxy);
 // One line per request: no query strings or bodies (they can carry codes, tokens and user content).
 app.use((req, res, next) => {
   const start = performance.now();
+  // Capture now: nested routers rewrite req.url/req.path to their mount-relative form.
+  const path = req.originalUrl.split("?")[0];
   res.on("finish", () => {
-    const rpc = req.path === "/mcp" ? describeRpc(req.body) : "";
+    const rpc = path === "/mcp" ? describeRpc(req.body) : "";
     const ms = Math.round(performance.now() - start);
-    console.log(`${req.method} ${req.path} ${res.statusCode} ${ms}ms${rpc ? ` ${rpc}` : ""}`);
+    console.log(`${req.method} ${path} ${res.statusCode} ${ms}ms${rpc ? ` ${rpc}` : ""}`);
   });
   next();
 });
@@ -120,34 +123,16 @@ if (!config.auth.disabled) {
   console.warn("WARNING: AUTH_DISABLED=true — /mcp accepts unauthenticated requests (loopback only).");
 }
 
-// Stateless Streamable HTTP: a fresh server + transport per request.
-app.post("/mcp", ...mcpMiddleware, async (req, res) => {
-  const server = createServer();
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-  res.on("close", () => {
-    void transport.close();
-    void server.close();
-  });
-  try {
-    await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
-  } catch (err) {
-    console.error("MCP request failed:", err);
-    if (!res.headersSent) {
-      res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal error" }, id: null });
-    }
-  }
+// Serves the 2026-07-28 protocol (server/discover, per-request envelopes) and, statelessly,
+// 2025-era clients that still initialize. A fresh server instance handles each request.
+const mcpHandler = createMcpHandler(createServer, {
+  legacy: "stateless",
+  onerror: (err) => console.error("MCP error:", err.message),
 });
-
-const methodNotAllowed: express.RequestHandler = (_req, res) => {
-  res.status(405).set("Allow", "POST").json({
-    jsonrpc: "2.0",
-    error: { code: -32000, message: "Method not allowed" },
-    id: null,
-  });
-};
-app.get("/mcp", methodNotAllowed);
-app.delete("/mcp", methodNotAllowed);
+const nodeMcpHandler = toNodeHandler(mcpHandler, {
+  onerror: (err) => console.error("MCP request failed:", err),
+});
+app.all("/mcp", ...mcpMiddleware, (req, res) => nodeMcpHandler(req, res, req.body));
 
 const httpServer = app.listen(config.port, config.host, () => {
   console.log(`Anytype MCP connector v${config.version} listening on http://${config.host}:${config.port}`);
@@ -157,6 +142,7 @@ const httpServer = app.listen(config.port, config.host, () => {
 
 function shutdown(signal: string) {
   console.log(`${signal} received, shutting down`);
+  void mcpHandler.close();
   httpServer.close(() => process.exit(0));
   httpServer.closeIdleConnections();
   setTimeout(() => process.exit(0), 10_000).unref();
