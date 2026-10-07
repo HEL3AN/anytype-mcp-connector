@@ -1,5 +1,6 @@
-# Optional overlay: route headless Anytype's sync traffic through a SOCKS5 proxy (e.g. a VLESS/xray
-# client) for networks where the Anytype sync nodes are blocked or throttled.
+# Optional overlay: route all outbound traffic of the stack through a SOCKS5 proxy (e.g. a VLESS/xray
+# client) for networks where the Anytype sync nodes — and claude.ai, which serves Claude's OAuth client
+# metadata documents — are blocked, throttled or geo-restricted.
 #
 # Enable in deploy/.env:
 #   COMPOSE_FILE=docker-compose.yml:compose.proxy.yml
@@ -8,8 +9,9 @@
 #   COMPOSE_PROFILES=host-proxy               # add to existing profiles with a comma
 #   HOST_PROXY_PORT=10808
 #
-# anytype shares the network namespace of `egress`, where tun2socks sends all non-local traffic
-# through the proxy. Traffic inside the Docker network (connector -> anytype API) stays direct.
+# anytype and the connector share the network namespace of `egress`, where tun2socks sends all
+# non-local traffic through the proxy. The connector reaches anytype on 127.0.0.1; the connector's
+# port is published on `egress`.
 
 services:
   egress:
@@ -21,7 +23,9 @@ services:
     environment:
       PROXY: ${EGRESS_PROXY:-socks5://${BACKEND_GATEWAY:-172.31.250.1}:${HOST_PROXY_BRIDGE_PORT:-10818}}
       LOGLEVEL: warning
-    networks: [backend]
+    networks: [backend, web]
+    ports:
+      - "127.0.0.1:${CONNECTOR_PORT:-3040}:3000"
 
   # Exposes a proxy bound to the host's loopback on the backend network's gateway address, so `egress`
   # can reach it (Docker blocks containers from other bridges' addresses). Not reachable from outside.
@@ -39,12 +43,18 @@ services:
     network_mode: service:egress
     networks: !reset null
     depends_on: [egress]
-    environment:
-      ANYTYPE_API_ALLOWED_HOSTS: egress
 
   connector:
+    network_mode: service:egress
+    networks: !reset null
+    ports: !reset []
     environment:
-      ANYTYPE_API_URL: http://egress:31012
+      ANYTYPE_API_URL: http://127.0.0.1:31012
+
+  # Only used with COMPOSE_PROFILES=caddy: the connector now lives in egress's namespace.
+  caddy:
+    environment:
+      UPSTREAM: egress:3000
 
 # Fixed subnet and interface name so the bridge can bind to a known gateway address and a host
 # firewall rule can target it. With ufw:
