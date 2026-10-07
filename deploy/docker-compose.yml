@@ -11,6 +11,10 @@ services:
     environment:
       # The JSON API only accepts Host headers it knows; the connector calls it as http://anytype:31012.
       ANYTYPE_API_ALLOWED_HOSTS: anytype
+      # Sync over TCP (yamux) instead of QUIC/UDP. Servers often have small UDP buffers or filtered UDP,
+      # which leaves the first sync stuck; set ANYTYPE_PREFER_TCP=false to use QUIC.
+      # (The heart config field is spelled "PeferYamuxTransport".)
+      ANYTYPE_PEFERYAMUXTRANSPORT: ${ANYTYPE_PREFER_TCP:-true}
     volumes:
       - anytype-data:/root/.anytype
       - anytype-config:/root/.config/anytype
