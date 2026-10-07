@@ -2,12 +2,8 @@ import { fileURLToPath } from "node:url";
 import express from "express";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
-import { hostHeaderValidation } from "@modelcontextprotocol/sdk/server/middleware/hostHeaderValidation.js";
-// The v2 SDK only ships resource-server helpers; the OAuth authorization server still comes from v1.
-import { getOAuthProtectedResourceMetadataUrl, mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
-import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
 import { AnytypeClient } from "./anytype/client.js";
-import { OwnerOAuthProvider } from "./auth/provider.js";
+import { OAuthServer } from "./auth/oauth-server.js";
 import { config } from "./config.js";
 import { renderLandingPage } from "./landing-page.js";
 import { registerTools } from "./tools.js";
@@ -57,7 +53,13 @@ app.use((req, res, next) => {
 });
 
 // DNS-rebinding protection: only accept expected Host headers.
-app.use(hostHeaderValidation(["localhost", "127.0.0.1", "[::1]", ...config.allowedHosts]));
+const allowedHostnames = new Set(["localhost", "127.0.0.1", "[::1]", ...config.allowedHosts]);
+app.use((req, res, next) => {
+  const host = req.headers.host ?? "";
+  const hostname = host.startsWith("[") ? host.slice(0, host.indexOf("]") + 1) : host.split(":")[0]!;
+  if (allowedHostnames.has(hostname.toLowerCase())) return next();
+  res.status(403).json({ jsonrpc: "2.0", error: { code: -32000, message: `Invalid Host: ${hostname}` }, id: null });
+});
 
 // Icons (favicon.ico, icon.svg, icon-128.png) used by Claude and browsers to show the connector.
 app.use(
@@ -111,36 +113,20 @@ app.get("/readyz", async (_req, res) => {
 const mcpMiddleware: express.RequestHandler[] = [express.json({ limit: "4mb" })];
 
 if (!config.auth.disabled) {
-  const provider = new OwnerOAuthProvider({
+  const oauth = new OAuthServer({
+    issuer: config.publicUrl,
+    resource: config.mcpUrl,
     dataDir: config.auth.dataDir,
     ownerPassword: config.auth.ownerPassword,
-    resource: config.mcpUrl,
     scopes: SCOPES,
     accessTokenTtlSec: config.auth.accessTokenTtlSec,
     refreshTokenTtlSec: config.auth.refreshTokenTtlSec,
     allowedRedirectUris: config.auth.allowedRedirectUris,
+    cimdTrustedHosts: config.auth.cimdTrustedHosts,
   });
-
-  // /authorize, /token, /register, /revoke and the RFC 8414 / RFC 9728 metadata documents.
-  app.use(
-    mcpAuthRouter({
-      provider,
-      issuerUrl: config.publicUrl,
-      resourceServerUrl: config.mcpUrl,
-      scopesSupported: SCOPES,
-      resourceName: "Anytype",
-      clientRegistrationOptions: { clientSecretExpirySeconds: 0 },
-    }),
-  );
-  app.use("/oauth/consent", provider.consentRouter());
-
-  mcpMiddleware.unshift(
-    requireBearerAuth({
-      verifier: provider,
-      resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(config.mcpUrl),
-      expectedResource: config.mcpUrl,
-    }),
-  );
+  // /authorize, /oauth/consent, /token, /register, /revoke and the RFC 8414 / RFC 9728 metadata.
+  app.use(oauth.router());
+  mcpMiddleware.unshift(oauth.bearer());
 } else {
   console.warn("WARNING: AUTH_DISABLED=true — /mcp accepts unauthenticated requests (loopback only).");
 }

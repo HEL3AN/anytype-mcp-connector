@@ -37,6 +37,8 @@ services:
       # Exactly one proxy (Caddy) sits in front of the connector.
       TRUST_PROXY: "1"
       EXTRA_REDIRECT_URIS: ${EXTRA_REDIRECT_URIS:-}
+      # Hosts allowed to serve OAuth Client ID Metadata Documents (comma-separated, "*" = any public host)
+      CIMD_TRUSTED_HOSTS: ${CIMD_TRUSTED_HOSTS:-claude.ai,claude.com}
       # Optional: Google Search Console "HTML tag" token, so Google indexes the home page and its icon
       # (Claude shows connector icons from Google's favicon service).
       GOOGLE_SITE_VERIFICATION: ${GOOGLE_SITE_VERIFICATION:-}

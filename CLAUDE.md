@@ -29,7 +29,9 @@ Claude ──HTTPS──▶ host nginx (TLS, certbot) ──▶ connector :3040�
 | `src/index.ts` | Express app: host validation, request log, `/`, icons, `/healthz`, `/readyz`, OAuth routes, `/mcp` |
 | `src/tools.ts` | All MCP tools (Anytype API v2). Tool annotations are required for the directory |
 | `src/anytype/client.ts` | Thin fetch client for the Anytype JSON API v2 (ETag, error passthrough) |
-| `src/auth/*` | Single-owner OAuth 2.1 authorization server (consent page with owner password) |
+| `src/auth/oauth-server.ts` | Own OAuth 2.1 authorization server: CIMD (preferred) + DCR (compat), PKCE S256, RFC 9207 `iss`, RFC 8707 resource binding, rotating refresh tokens, bearer middleware, metadata |
+| `src/auth/cimd.ts` | Client ID Metadata Document resolver: https-only, no redirects, public-IP check, size/time limits, cache, trust policy `CIMD_TRUSTED_HOSTS` (default `claude.ai,claude.com`) |
+| `src/auth/store.ts`, `login-page.ts` | JSON-file OAuth state (DCR clients, refresh tokens, signing key) and consent/error pages |
 | `src/landing-page.ts`, `public/` | Home page + icons (favicon.ico, icon.svg, icon-128.png) |
 | `deploy/` | `docker-compose.yml`, `compose.proxy.yml` (blocked networks), `setup.sh`, `update.sh`, `backup.sh`, nginx template |
 | `scripts/smoke.ts`, `scripts/oauth-e2e.ts` | End-to-end checks against a running server |
@@ -38,7 +40,8 @@ Claude ──HTTPS──▶ host nginx (TLS, certbot) ──▶ connector :3040�
 
 Stack: Node 24 (Docker; local dev works on 22), TypeScript, Express 5, zod 4,
 **MCP SDK v2** (`@modelcontextprotocol/server` + `/node`, `createMcpHandler`) serving protocol
-**2026-07-28** (`server/discover`) and, statelessly, 2025-era clients.
+**2026-07-28** (`server/discover`) and, statelessly, 2025-era clients. No dependency on SDK v1: the
+OAuth server is our own code (`src/auth`). Scripts use `@modelcontextprotocol/client` v2.
 
 ## Commands
 
@@ -47,7 +50,7 @@ npm run dev                      # tsx watch; reads .env.local (API_KEY, OWNER_P
 npm run typecheck && npm run build
 AUTH_DISABLED=true PORT=3100 PUBLIC_URL=http://localhost:3100 npx tsx src/index.ts   # local, no OAuth
 MCP_URL=http://localhost:3100/mcp npm run smoke -- --write   # full tool cycle (needs a key that sees a space)
-OWNER_PASSWORD=... BASE_URL=https://anytype.example.com npm run oauth-e2e   # 20 OAuth checks, works against prod
+OWNER_PASSWORD=... BASE_URL=https://anytype.example.com npm run oauth-e2e   # 34 OAuth checks (CIMD, DCR, iss, …), works against prod
 ```
 
 Local Anytype desktop API: `http://127.0.0.1:31009` (v2 since desktop 0.57.4). `.env.local` holds a
@@ -100,6 +103,8 @@ owner's real spaces.
   Claude uses CIMD only if AS metadata has `client_id_metadata_document_supported: true` **and** `none` in
   `token_endpoint_auth_methods_supported`. Claude Code CIMD: `https://claude.ai/oauth/claude-code-client-metadata`.
 - Claude caches discovery metadata ~5 min.
+- If a Claude surface can't connect after the CIMD switch, look for `CIMD client rejected: <url> — <reason>`
+  in the connector log; a new metadata host may need adding to `CIMD_TRUSTED_HOSTS`.
 - **Connector icons come from Google's favicon service** (Claude docs, "Network requirements"), not from
   the server or `serverInfo.icons`. Custom connectors show Google's favicon for the domain; Google must
   index the site first (Search Console verified via `GOOGLE_SITE_VERIFICATION`).

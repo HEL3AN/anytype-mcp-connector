@@ -74,6 +74,11 @@ export const config = {
      * Redirect URIs a dynamically registered client may use. Loopback URIs match on any port
      * (Claude Code uses an ephemeral one). Extend with EXTRA_REDIRECT_URIS for other MCP clients.
      */
+    /** Hosts allowed to serve Client ID Metadata Documents ("*" = any public host). */
+    cimdTrustedHosts: (process.env.CIMD_TRUSTED_HOSTS ?? "claude.ai,claude.com")
+      .split(",")
+      .map((h) => h.trim().toLowerCase())
+      .filter(Boolean),
     allowedRedirectUris: [
       "https://claude.ai/api/mcp/auth_callback",
       "https://claude.com/api/mcp/auth_callback",

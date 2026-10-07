@@ -1,7 +1,20 @@
 import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import type { OAuthClientInformationFull } from "@modelcontextprotocol/sdk/shared/auth.js";
+
+/** A client registered through Dynamic Client Registration (RFC 7591). */
+export interface RegisteredClient {
+  client_id: string;
+  client_id_issued_at: number;
+  client_name?: string;
+  client_secret?: string;
+  /** 0 = never expires */
+  client_secret_expires_at?: number;
+  redirect_uris: string[];
+  token_endpoint_auth_method: string;
+  grant_types: string[];
+  response_types: string[];
+}
 
 export interface RefreshTokenRecord {
   clientId: string;
@@ -13,7 +26,7 @@ export interface RefreshTokenRecord {
 }
 
 interface StoreData {
-  clients: Record<string, OAuthClientInformationFull>;
+  clients: Record<string, RegisteredClient>;
   /** sha256(refresh token) -> record */
   refreshTokens: Record<string, RefreshTokenRecord>;
   /** sha256 of already-rotated refresh tokens -> family; reuse revokes the family. */
@@ -50,7 +63,7 @@ export class AuthStore {
     return Object.keys(this.data.clients).length;
   }
 
-  saveClient(client: OAuthClientInformationFull) {
+  saveClient(client: RegisteredClient) {
     this.data.clients[client.client_id] = client;
     this.flush();
   }

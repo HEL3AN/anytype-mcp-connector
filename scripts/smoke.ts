@@ -1,12 +1,15 @@
 // End-to-end check against a running server: `npm run smoke [-- --write]`.
 // --write creates a temporary object, edits it and deletes it again.
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+// MCP_PROTOCOL=legacy forces the 2025 initialize handshake; default negotiates (2026-07-28 when offered).
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 
 const url = process.env.MCP_URL ?? "http://127.0.0.1:3000/mcp";
 const write = process.argv.includes("--write");
 
-const client = new Client({ name: "smoke", version: "0.0.0" });
+const client = new Client(
+  { name: "smoke", version: "0.0.0" },
+  { versionNegotiation: { mode: process.env.MCP_PROTOCOL === "legacy" ? "legacy" : "auto" } },
+);
 await client.connect(new StreamableHTTPClientTransport(new URL(url)));
 
 async function call(name: string, args: Record<string, unknown> = {}) {

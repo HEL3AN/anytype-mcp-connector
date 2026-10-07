@@ -6,14 +6,13 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit --ignoreConfig --module nodenext --moduleResolution nodenext --target es2023 --skipLibCheck --strict --types node scripts/smoke.ts scripts/oauth-e2e.ts",
     "smoke": "tsx scripts/smoke.ts",
     "oauth-e2e": "tsx scripts/oauth-e2e.ts"
   },
   "type": "module",
   "dependencies": {
     "@modelcontextprotocol/node": "^2.1.1",
-    "@modelcontextprotocol/sdk": "^1.32.1",
     "@modelcontextprotocol/server": "^2.3.1",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.1",
