@@ -42,6 +42,14 @@ volumes (`anytype-data`, `connector-data`, `caddy-data`).
 - [x] Backups of volumes (`deploy/backup.sh`); restore procedure to be tested
 - [x] Version shown in `/healthz` and MCP server info
 
+## Phase 3.5 — Protocol and auth currency (MCP 2026-07-28)
+
+- [x] Serve MCP 2026-07-28 (`server/discover`, stateless envelopes) via SDK v2, legacy 2025 clients still work
+- [ ] OAuth: `iss` in authorization responses (RFC 9207) + `authorization_response_iss_parameter_supported`
+- [ ] OAuth: Client ID Metadata Documents (CIMD) — DCR is deprecated in 2026-07-28
+- [ ] Own authorization-server handlers, drop the v1 SDK dependency
+- [ ] `ttlMs`/`cacheScope` hints for `tools/list` (static tool set)
+
 ## Phase 4 — Better tools
 
 - [ ] Unit tests with a mocked Anytype API; e2e suite against a dedicated test space
