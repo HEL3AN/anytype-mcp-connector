@@ -21,16 +21,16 @@ Each open item links to a GitHub issue with context and a definition of done.
 - CI: typecheck, build, Docker image, compose validation, shellcheck
 - Home page, icons, `robots.txt`, Search Console verification hook
 - Version audit (Oct 2026): Node 24, current actions/images, SDK v2
+- Own OAuth server for MCP 2026-07-28: CIMD (claude.ai uses it), RFC 9207 `iss`, SDK v1 removed — #1
 
 ## Next (in order)
 
-1. **OAuth currency** — CIMD, `iss` (RFC 9207), own authorization server, drop SDK v1 — #1 *(in progress)*
-2. **Release pipeline** — tag → multi-arch image on GHCR → server pulls — #2
-3. **Restore drill** — verify backups actually restore — #3
-4. **Tests** — unit (mocked API) + e2e on the test space, in CI — #4
-5. **Tool UX** — compact outputs, error hints, collections, comments/chats, `ttlMs` — #5
-6. **Open source** — README, LICENSE, SECURITY, privacy policy, strip private notes — #7
-7. **Directory** — Anyproto permission, submission materials — #8
+1. **Release pipeline** — tag → multi-arch image on GHCR → server pulls — #2
+2. **Restore drill** — verify backups actually restore — #3
+3. **Tests** — unit (mocked API) + e2e on the test space, in CI — #4
+4. **Tool UX** — compact outputs, error hints, collections, comments/chats, `ttlMs` — #5
+5. **Open source** — README, LICENSE, SECURITY, privacy policy, strip private notes — #7
+6. **Directory** — Anyproto permission, submission materials — #8
 
 ## Known issues
 
