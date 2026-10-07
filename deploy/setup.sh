@@ -91,9 +91,27 @@ else
   fi
 fi
 
+if ! any auth status 2>/dev/null | strip_ansi | grep -q "Logged in"; then
+  echo "Anytype is not logged in. Check: docker compose logs anytype"
+  exit 1
+fi
+
 echo
 echo "==> Spaces visible to this account (sync can take a few minutes after the first login)"
 any space list | strip_ansi || true
+
+# key_works KEY — true if the Anytype JSON API accepts the key
+key_works() {
+  compose exec -T -e K="$1" anytype sh -c \
+    'wget -q -O /dev/null --header "Authorization: Bearer $K" http://127.0.0.1:31012/v2/auth/whoami' 2>/dev/null
+}
+
+existing_key=$(env_value ANYTYPE_API_KEY)
+if [ -n "$existing_key" ] && ! key_works "$existing_key"; then
+  echo "The API key in .env is not accepted by Anytype; creating a new one."
+  set_env ANYTYPE_API_KEY ""
+fi
+unset existing_key
 
 if [ -z "$(env_value ANYTYPE_API_KEY)" ]; then
   echo
@@ -111,7 +129,9 @@ if [ -z "$(env_value ANYTYPE_API_KEY)" ]; then
   out=$(any "${args[@]}" | strip_ansi)
   key=$(printf '%s\n' "$out" | sed -n 's/.*Key: *//p' | head -1)
   [ -n "$key" ] || { printf '%s\n' "$out"; echo "Could not read the API key from the output above."; exit 1; }
+  key_works "$key" || { echo "Anytype created a key but does not accept it. Check: docker compose logs anytype"; exit 1; }
   set_env ANYTYPE_API_KEY "$key"
+  unset key
   printf '%s\n' "$out" | grep -v "Key:" || true
   echo "API key stored in deploy/.env"
 fi
