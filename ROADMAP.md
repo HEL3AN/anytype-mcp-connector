@@ -29,9 +29,10 @@ volumes (`anytype-data`, `connector-data`, `caddy-data`).
 
 ## Phase 2 — VPS rollout
 
-- [ ] DNS `anytype.example.com` → VPS
-- [ ] First deploy, Anytype login, spaces synced
-- [ ] Connect from claude.ai (new owner password), run smoke + OAuth e2e against production
+- [x] DNS `anytype.example.com` → VPS (host nginx + certbot)
+- [x] First deploy, Anytype login, spaces synced (through the VLESS proxy overlay)
+- [x] OAuth e2e against production
+- [ ] Connect from claude.ai and use it from the phone
 
 ## Phase 3 — Updates and operations
 
