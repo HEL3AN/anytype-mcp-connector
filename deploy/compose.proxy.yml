@@ -19,19 +19,20 @@ services:
     devices:
       - /dev/net/tun:/dev/net/tun
     environment:
-      PROXY: ${EGRESS_PROXY:-socks5://172.17.0.1:${HOST_PROXY_BRIDGE_PORT:-10818}}
+      PROXY: ${EGRESS_PROXY:-socks5://${BACKEND_GATEWAY:-172.31.250.1}:${HOST_PROXY_BRIDGE_PORT:-10818}}
       LOGLEVEL: warning
     networks: [backend]
 
-  # Exposes a proxy bound to the host's loopback on the docker0 address, so `egress` can reach it.
-  # Only containers on this host can connect to it.
+  # Exposes a proxy bound to the host's loopback on the backend network's gateway address, so `egress`
+  # can reach it (Docker blocks containers from other bridges' addresses). Not reachable from outside.
   proxy-bridge:
     profiles: [host-proxy]
     image: ${SOCAT_IMAGE:-alpine/socat:1.8.1.3}
     restart: unless-stopped
     network_mode: host
+    depends_on: [egress] # the backend bridge (and its gateway address) must exist first
     command:
-      - TCP-LISTEN:${HOST_PROXY_BRIDGE_PORT:-10818},bind=172.17.0.1,fork,reuseaddr
+      - TCP-LISTEN:${HOST_PROXY_BRIDGE_PORT:-10818},bind=${BACKEND_GATEWAY:-172.31.250.1},fork,reuseaddr
       - TCP:127.0.0.1:${HOST_PROXY_PORT:-10808}
 
   anytype:
@@ -44,3 +45,11 @@ services:
   connector:
     environment:
       ANYTYPE_API_URL: http://egress:31012
+
+# Fixed subnet so the bridge can bind to a known gateway address.
+networks:
+  backend:
+    ipam:
+      config:
+        - subnet: ${BACKEND_SUBNET:-172.31.250.0/24}
+          gateway: ${BACKEND_GATEWAY:-172.31.250.1}
