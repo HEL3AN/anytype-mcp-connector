@@ -73,8 +73,21 @@ else
     echo "Save the account key printed above somewhere safe."
   else
     read -rsp "Account key (input hidden): " account_key; echo
-    printf '%s\n' "$account_key" | any auth login | strip_ansi
+    # anytype-cli gives every gRPC call 5 seconds; the first login of an account with data can need
+    # longer while Anytype downloads it. Each attempt makes progress, so retry with the same key.
+    logged_in=""
+    for attempt in $(seq 1 15); do
+      out=$(printf '%s\n' "$account_key" | any auth login 2>&1 | strip_ansi || true)
+      printf '%s\n' "$out"
+      if [[ "$out" == *"Successfully logged in"* ]]; then
+        logged_in=1
+        break
+      fi
+      echo "Login attempt $attempt did not finish yet (Anytype is still loading the account). Retrying in 10s..."
+      sleep 10
+    done
     unset account_key
+    [ -n "$logged_in" ] || { echo "Could not log in. Check: docker compose logs anytype"; exit 1; }
   fi
 fi
 
