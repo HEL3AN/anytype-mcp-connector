@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Validate compose file
+        working-directory: deploy
+        run: |
+          cp .env.example .env
+          sed -i "s/^OWNER_PASSWORD=.*/OWNER_PASSWORD=ci-password-123/; s/^ANYTYPE_API_KEY=.*/ANYTYPE_API_KEY=ci/" .env
+          docker compose config --quiet
+      - name: Check shell scripts
+        run: shellcheck deploy/*.sh
