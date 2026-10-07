@@ -8,7 +8,13 @@ The stack runs three containers with Docker Compose:
 | `connector` | built from this repository         | MCP server + OAuth for Claude                            |
 | `caddy`     | `caddy`                            | HTTPS with automatic Let's Encrypt certificates          |
 
-Only Caddy publishes ports (80, 443). The Anytype API is reachable only from the connector.
+The Anytype API is reachable only from the connector. The connector is published on
+`127.0.0.1:3040` for a reverse proxy on the host.
+
+**Reverse proxy.** If the server has nothing on ports 80/443, the bundled Caddy (`COMPOSE_PROFILES=caddy`,
+the default) handles HTTPS automatically. If you already run nginx or another proxy, `setup.sh`
+detects the busy ports, disables Caddy and generates an nginx site in `deploy/nginx/<domain>.conf`
+(SSE-friendly: no buffering, long read timeout); enable it and run `certbot --nginx -d <domain>`.
 
 ## Requirements
 

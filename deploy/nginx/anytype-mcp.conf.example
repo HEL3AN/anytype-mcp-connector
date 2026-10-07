@@ -1,0 +1,27 @@
+# nginx site for a host that already runs nginx (COMPOSE_PROFILES empty in deploy/.env).
+# 1. Replace anytype.example.com with your DOMAIN and 3040 with CONNECTOR_PORT if you changed it.
+# 2. sudo cp anytype-mcp.conf.example /etc/nginx/sites-available/anytype.example.com
+#    sudo ln -s /etc/nginx/sites-available/anytype.example.com /etc/nginx/sites-enabled/
+#    sudo nginx -t && sudo systemctl reload nginx
+# 3. sudo certbot --nginx -d anytype.example.com   (adds the 443 server block and the redirect)
+
+server {
+    listen 80;
+    server_name anytype.example.com;
+
+    client_max_body_size 8m;
+
+    location / {
+        proxy_pass http://127.0.0.1:3040;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+
+        # MCP Streamable HTTP may answer with Server-Sent Events: don't buffer, allow long reads.
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 300s;
+    }
+}

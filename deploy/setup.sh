@@ -36,6 +36,12 @@ if [ -z "$domain" ] || [ "$domain" = "anytype.example.com" ]; then
   set_env DOMAIN "$domain"
 fi
 
+if [ "$(env_value COMPOSE_PROFILES)" = "caddy" ] && ss -ltnH 2>/dev/null | grep -qE '[:.](80|443)\s'; then
+  echo "Ports 80/443 are already in use on this host (an existing reverse proxy?)."
+  read -rp "Use that proxy instead of the bundled Caddy? [Y/n]: " use_host_proxy
+  if [ "${use_host_proxy,,}" != "n" ]; then set_env COMPOSE_PROFILES ""; fi
+fi
+
 password=$(env_value OWNER_PASSWORD)
 if [ ${#password} -lt 12 ]; then
   while :; do
@@ -98,15 +104,27 @@ if [ -z "$(env_value ANYTYPE_API_KEY)" ]; then
 fi
 
 echo
-echo "==> Building and starting the connector and Caddy"
+echo "==> Building and starting the stack"
 compose up -d --build
 
 echo "==> Waiting for the connector to become ready"
 for _ in $(seq 1 30); do
   if compose exec -T connector node -e "fetch('http://127.0.0.1:3000/readyz').then(r=>r.text().then(t=>{console.log(t);process.exit(r.ok?0:1)}),()=>process.exit(1))" 2>/dev/null; then
+    domain=$(env_value DOMAIN)
     echo
-    echo "Done. Add this URL in Claude (Settings > Connectors > Add custom connector):"
-    echo "  https://$(env_value DOMAIN)/mcp"
+    if [ -z "$(env_value COMPOSE_PROFILES)" ]; then
+      port=$(env_value CONNECTOR_PORT); port=${port:-3040}
+      sed "s/anytype\.example\.com/$domain/g; s/127\.0\.0\.1:3040/127.0.0.1:$port/" nginx/anytype-mcp.conf.example \
+        > "nginx/$domain.conf"
+      echo "Connector is listening on 127.0.0.1:$port. Enable the nginx site (needs sudo):"
+      echo "  sudo cp $PWD/nginx/$domain.conf /etc/nginx/sites-available/$domain"
+      echo "  sudo ln -s /etc/nginx/sites-available/$domain /etc/nginx/sites-enabled/"
+      echo "  sudo nginx -t && sudo systemctl reload nginx"
+      echo "  sudo certbot --nginx -d $domain"
+      echo
+    fi
+    echo "Then add this URL in Claude (Settings > Connectors > Add custom connector):"
+    echo "  https://$domain/mcp"
     exit 0
   fi
   sleep 2

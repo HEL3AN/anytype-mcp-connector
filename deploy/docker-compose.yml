@@ -1,4 +1,5 @@
-# Production stack: Caddy (TLS) -> connector (OAuth + MCP) -> anytype-cli (headless Anytype).
+# Production stack: reverse proxy (TLS) -> connector (OAuth + MCP) -> anytype-cli (headless Anytype).
+# The proxy is either the bundled Caddy (COMPOSE_PROFILES=caddy) or one already on the host (see nginx/).
 # Usage: see docs/deploy.md. Run from this directory: `docker compose up -d`.
 name: anytype-mcp
 
@@ -32,11 +33,17 @@ services:
       # Exactly one proxy (Caddy) sits in front of the connector.
       TRUST_PROXY: "1"
       EXTRA_REDIRECT_URIS: ${EXTRA_REDIRECT_URIS:-}
+    # Published on loopback only, for a reverse proxy running on the host (nginx, ...).
+    # With the bundled Caddy (COMPOSE_PROFILES=caddy) this port is not needed but harmless.
+    ports:
+      - "127.0.0.1:${CONNECTOR_PORT:-3040}:3000"
     volumes:
       - connector-data:/data
     networks: [backend, web]
 
+  # Optional TLS reverse proxy for servers that don't run one: set COMPOSE_PROFILES=caddy in .env.
   caddy:
+    profiles: [caddy]
     image: ${CADDY_IMAGE:-caddy:2.10-alpine}
     restart: unless-stopped
     depends_on: [connector]
