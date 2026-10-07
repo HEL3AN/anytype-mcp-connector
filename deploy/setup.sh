@@ -102,6 +102,8 @@ any space list | strip_ansi || true
 
 # key_works KEY — true if the Anytype JSON API accepts the key
 key_works() {
+  # $K must expand inside the container, not here (keeps the key out of the host command line).
+  # shellcheck disable=SC2016
   compose exec -T -e K="$1" anytype sh -c \
     'wget -q -O /dev/null --header "Authorization: Bearer $K" http://127.0.0.1:31012/v2/auth/whoami' 2>/dev/null
 }
