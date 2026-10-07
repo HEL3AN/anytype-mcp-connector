@@ -46,9 +46,13 @@ services:
     environment:
       ANYTYPE_API_URL: http://egress:31012
 
-# Fixed subnet so the bridge can bind to a known gateway address.
+# Fixed subnet and interface name so the bridge can bind to a known gateway address and a host
+# firewall rule can target it. With ufw:
+#   sudo ufw allow in on br-anytype-mcp to 172.31.250.1 port 10818 proto tcp comment 'anytype-mcp egress'
 networks:
   backend:
+    driver_opts:
+      com.docker.network.bridge.name: br-anytype-mcp
     ipam:
       config:
         - subnet: ${BACKEND_SUBNET:-172.31.250.0/24}
