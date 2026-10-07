@@ -15,6 +15,8 @@ export function renderLoginPage(view: {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Connect Anytype</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
 <style>
   :root { --bg:#f6f6f4; --card:#fff; --text:#1d1d1b; --muted:#6b6b66; --border:#e2e2dd; --accent:#1d1d1b; --accent-text:#fff; --error:#b42318; }
   @media (prefers-color-scheme: dark) {
@@ -24,6 +26,7 @@ export function renderLoginPage(view: {
   body { margin:0; min-height:100vh; display:grid; place-items:center; padding:16px;
          background:var(--bg); color:var(--text); font:16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
   main { width:100%; max-width:400px; background:var(--card); border:1px solid var(--border); border-radius:16px; padding:28px; }
+  .logo { display:block; width:48px; height:48px; border-radius:12px; margin-bottom:16px; }
   h1 { font-size:20px; margin:0 0 8px; }
   p { margin:0 0 16px; color:var(--muted); }
   strong { color:var(--text); }
@@ -37,6 +40,7 @@ export function renderLoginPage(view: {
 </head>
 <body>
 <main>
+  <img class="logo" src="/icon-128.png" alt="" width="48" height="48">
   <h1>Connect to your Anytype</h1>
   <p><strong>${client}</strong> wants to read and edit objects in your Anytype spaces. After you approve, you will be sent back to <strong>${host}</strong>.</p>
   <p>Only approve if you started this connection yourself.</p>

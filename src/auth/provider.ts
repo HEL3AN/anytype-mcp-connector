@@ -284,7 +284,7 @@ function sameResource(a: string, b: string) {
 function sendLoginPage(res: Response, view: Parameters<typeof renderLoginPage>[0]) {
   res
     .set({
-      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https: http://localhost:* http://127.0.0.1:*; frame-ancestors 'none'",
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; form-action 'self' https: http://localhost:* http://127.0.0.1:*; frame-ancestors 'none'",
       "X-Frame-Options": "DENY",
       "Referrer-Policy": "no-referrer",
       "Cache-Control": "no-store",

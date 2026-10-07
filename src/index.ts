@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import express from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -15,7 +16,16 @@ const api = new AnytypeClient(config.anytypeUrl, config.anytypeApiKey);
 
 function createServer() {
   const server = new McpServer(
-    { name: "anytype", title: "Anytype", version: config.version },
+    {
+      name: "anytype",
+      title: "Anytype",
+      version: config.version,
+      websiteUrl: config.publicUrl.href,
+      icons: [
+        { src: new URL("/icon.svg", config.publicUrl).href, mimeType: "image/svg+xml", sizes: ["any"] },
+        { src: new URL("/icon-128.png", config.publicUrl).href, mimeType: "image/png", sizes: ["128x128"] },
+      ],
+    },
     {
       instructions:
         "Tools for the user's Anytype workspace (a local-first, end-to-end encrypted knowledge base). " +
@@ -44,6 +54,14 @@ app.use((req, res, next) => {
 
 // DNS-rebinding protection: only accept expected Host headers.
 app.use(hostHeaderValidation(["localhost", "127.0.0.1", "[::1]", ...config.allowedHosts]));
+
+// Icons (favicon.ico, icon.svg, icon-128.png) used by Claude and browsers to show the connector.
+app.use(
+  express.static(fileURLToPath(new URL("../public/", import.meta.url)), {
+    index: false,
+    maxAge: "7d",
+  }),
+);
 
 app.get("/healthz", (_req, res) => {
   res.json({ ok: true, version: config.version });
