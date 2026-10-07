@@ -24,7 +24,9 @@ if [ "${1:-}" != "--no-pull-repo" ] && git -C .. rev-parse --git-dir >/dev/null 
 fi
 
 echo "==> Saving current connector image as rollback point"
-docker image inspect "$image" >/dev/null 2>&1 && docker tag "$image" anytype-mcp-connector:previous || true
+if docker image inspect "$image" >/dev/null 2>&1; then
+  docker tag "$image" anytype-mcp-connector:previous
+fi
 
 echo "==> Pulling images"
 compose pull --ignore-buildable
@@ -44,7 +46,10 @@ compose logs --tail=50 connector || true
 if docker image inspect anytype-mcp-connector:previous >/dev/null 2>&1; then
   docker tag anytype-mcp-connector:previous "$image"
   compose up -d --no-build connector
-  wait_ready && echo "Rolled back to the previous connector image." && exit 1
+  if wait_ready; then
+    echo "Rolled back to the previous connector image."
+    exit 1
+  fi
 fi
 echo "Rollback failed or no previous image. Check: docker compose logs"
 exit 1
