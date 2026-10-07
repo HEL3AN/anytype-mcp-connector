@@ -1,0 +1,17 @@
+{$DOMAIN} {
+	# Streamable HTTP responses may be SSE: never buffer them.
+	reverse_proxy connector:3000 {
+		flush_interval -1
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

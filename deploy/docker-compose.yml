@@ -1,0 +1,64 @@
+# Production stack: Caddy (TLS) -> connector (OAuth + MCP) -> anytype-cli (headless Anytype).
+# Usage: see docs/deploy.md. Run from this directory: `docker compose up -d`.
+name: anytype-mcp
+
+services:
+  anytype:
+    image: ${ANYTYPE_CLI_IMAGE:-ghcr.io/anyproto/anytype-cli:v0.4.0}
+    command: ["serve", "--listen-address", "0.0.0.0:31012"]
+    restart: unless-stopped
+    environment:
+      # The JSON API only accepts Host headers it knows; the connector calls it as http://anytype:31012.
+      ANYTYPE_API_ALLOWED_HOSTS: anytype
+    volumes:
+      - anytype-data:/root/.anytype
+      - anytype-config:/root/.config/anytype
+    # Needs outbound internet to sync with the any-sync network.
+    # No published ports: the API is only reachable from the connector.
+    networks: [backend]
+
+  connector:
+    image: ${CONNECTOR_IMAGE:-anytype-mcp-connector:local}
+    build: ..
+    restart: unless-stopped
+    depends_on:
+      anytype:
+        condition: service_healthy
+    environment:
+      ANYTYPE_API_URL: http://anytype:31012
+      ANYTYPE_API_KEY: ${ANYTYPE_API_KEY:?set ANYTYPE_API_KEY in .env (scripts/setup.sh prints it)}
+      PUBLIC_URL: https://${DOMAIN:?set DOMAIN in .env}
+      OWNER_PASSWORD: ${OWNER_PASSWORD:?set OWNER_PASSWORD in .env}
+      # Exactly one proxy (Caddy) sits in front of the connector.
+      TRUST_PROXY: "1"
+      EXTRA_REDIRECT_URIS: ${EXTRA_REDIRECT_URIS:-}
+    volumes:
+      - connector-data:/data
+    networks: [backend, web]
+
+  caddy:
+    image: ${CADDY_IMAGE:-caddy:2.10-alpine}
+    restart: unless-stopped
+    depends_on: [connector]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [web]
+
+networks:
+  backend:
+  web:
+
+volumes:
+  anytype-data:
+  anytype-config:
+  connector-data:
+  caddy-data:
+  caddy-config:

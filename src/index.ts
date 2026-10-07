@@ -15,7 +15,7 @@ const api = new AnytypeClient(config.anytypeUrl, config.anytypeApiKey);
 
 function createServer() {
   const server = new McpServer(
-    { name: "anytype", title: "Anytype", version: "0.1.0" },
+    { name: "anytype", title: "Anytype", version: config.version },
     {
       instructions:
         "Tools for the user's Anytype workspace (a local-first, end-to-end encrypted knowledge base). " +
@@ -29,13 +29,40 @@ function createServer() {
 
 const app = express();
 app.disable("x-powered-by");
-// Behind a tunnel / reverse proxy on the same host: trust X-Forwarded-For from loopback only.
-app.set("trust proxy", "loopback");
+app.set("trust proxy", config.trustProxy);
+
+// One line per request: no query strings or bodies (they can carry codes, tokens and user content).
+app.use((req, res, next) => {
+  const start = performance.now();
+  res.on("finish", () => {
+    const rpc = req.path === "/mcp" ? describeRpc(req.body) : "";
+    const ms = Math.round(performance.now() - start);
+    console.log(`${req.method} ${req.path} ${res.statusCode} ${ms}ms${rpc ? ` ${rpc}` : ""}`);
+  });
+  next();
+});
+
 // DNS-rebinding protection: only accept expected Host headers.
 app.use(hostHeaderValidation(["localhost", "127.0.0.1", "[::1]", ...config.allowedHosts]));
 
 app.get("/healthz", (_req, res) => {
-  res.json({ ok: true });
+  res.json({ ok: true, version: config.version });
+});
+
+// Readiness: Anytype is reachable and the API key is accepted.
+app.get("/readyz", async (_req, res) => {
+  try {
+    const { data } = await api.get<{ key_status?: string; grant?: { spaces?: unknown[]; all_spaces?: boolean } }>(
+      "/v2/auth/whoami",
+    );
+    res.json({
+      ok: true,
+      version: config.version,
+      anytype: { key_status: data.key_status, spaces: data.grant?.all_spaces ? "all" : (data.grant?.spaces?.length ?? 0) },
+    });
+  } catch (err) {
+    res.status(503).json({ ok: false, version: config.version, error: err instanceof Error ? err.message : String(err) });
+  }
 });
 
 const mcpMiddleware: express.RequestHandler[] = [express.json({ limit: "4mb" })];
@@ -104,8 +131,29 @@ const methodNotAllowed: express.RequestHandler = (_req, res) => {
 app.get("/mcp", methodNotAllowed);
 app.delete("/mcp", methodNotAllowed);
 
-app.listen(config.port, config.host, () => {
-  console.log(`Anytype MCP server listening on http://${config.host}:${config.port}`);
+const httpServer = app.listen(config.port, config.host, () => {
+  console.log(`Anytype MCP connector v${config.version} listening on http://${config.host}:${config.port}`);
   console.log(`MCP endpoint: ${config.mcpUrl.href} (auth ${config.auth.disabled ? "DISABLED" : "OAuth"})`);
   console.log(`Anytype API: ${config.anytypeUrl}`);
 });
+
+function shutdown(signal: string) {
+  console.log(`${signal} received, shutting down`);
+  httpServer.close(() => process.exit(0));
+  httpServer.closeIdleConnections();
+  setTimeout(() => process.exit(0), 10_000).unref();
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
+
+function describeRpc(body: unknown): string {
+  const msgs = Array.isArray(body) ? body : [body];
+  return msgs
+    .map((m) => {
+      if (!m || typeof m !== "object" || !("method" in m)) return "";
+      const { method, params } = m as { method: string; params?: { name?: unknown } };
+      return method === "tools/call" && typeof params?.name === "string" ? `${method}:${params.name}` : method;
+    })
+    .filter(Boolean)
+    .join(",");
+}

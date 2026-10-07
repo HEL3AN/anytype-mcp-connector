@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { loadEnvFile } from "node:process";
 import path from "node:path";
 
@@ -34,7 +35,18 @@ if (!authDisabled && ownerPassword.length < 12) {
   throw new Error("OWNER_PASSWORD must be at least 12 characters");
 }
 
+const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
+
+/** Express "trust proxy" setting: "loopback" by default; behind Caddy in Docker use a hop count like 1. */
+function parseTrustProxy(value: string | undefined): boolean | number | string {
+  if (!value) return "loopback";
+  if (value === "true" || value === "false") return value === "true";
+  return /^\d+$/.test(value) ? Number(value) : value;
+}
+
 export const config = {
+  version: pkg.version,
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   anytypeUrl: (process.env.ANYTYPE_API_URL ?? "http://127.0.0.1:31009").replace(/\/+$/, ""),
   // API_KEY is accepted as a fallback for the original .env.local layout.
   anytypeApiKey: process.env.ANYTYPE_API_KEY?.trim() || required("API_KEY"),

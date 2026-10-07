@@ -7,3 +7,4 @@ dist/
 tools/derive-account-key/derive-account-key
 tools/derive-account-key/*.exe
 data/
+deploy/backups/
