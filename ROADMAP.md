@@ -20,12 +20,12 @@ volumes (`anytype-data`, `connector-data`, `caddy-data`).
 ## Phase 1 — Deployable stack
 
 - [x] MCP server, Anytype v2 tools, OAuth 2.1 (DCR, PKCE, rotating refresh tokens)
-- [ ] Dockerfile for the connector (multi-stage, non-root, healthcheck)
-- [ ] `docker-compose.yml`: anytype-cli + connector + Caddy, `.env` template, pinned versions
-- [ ] Config for running behind a proxy (`TRUST_PROXY`), graceful shutdown, request logging
-- [ ] `/healthz` (liveness) and `/readyz` (Anytype reachable + key valid)
-- [ ] `scripts/setup.sh`: log anytype-cli in with an account key, create a scoped API key
-- [ ] Deployment guide (`docs/deploy.md`)
+- [x] Dockerfile for the connector (multi-stage, non-root, healthcheck)
+- [x] `docker-compose.yml`: anytype-cli + connector + Caddy, `.env` template, pinned versions
+- [x] Config for running behind a proxy (`TRUST_PROXY`), graceful shutdown, request logging
+- [x] `/healthz` (liveness) and `/readyz` (Anytype reachable + key valid)
+- [x] `deploy/setup.sh`: log anytype-cli in with an account key, create a scoped API key
+- [x] Deployment guide (`docs/deploy.md`)
 
 ## Phase 2 — VPS rollout
 
@@ -37,9 +37,9 @@ volumes (`anytype-data`, `connector-data`, `caddy-data`).
 
 - [ ] GitHub repository, CI (typecheck, tests) on every push
 - [ ] Release workflow: tag → multi-arch image on GHCR
-- [ ] `scripts/update.sh`: pull pinned versions, restart, verify `/readyz`, roll back on failure
-- [ ] Backups of volumes (OAuth state, Anytype data) and a restore procedure
-- [ ] Version shown in `/healthz` and MCP server info
+- [x] `deploy/update.sh`: pull pinned versions, restart, verify `/readyz`, roll back on failure
+- [x] Backups of volumes (`deploy/backup.sh`); restore procedure to be tested
+- [x] Version shown in `/healthz` and MCP server info
 
 ## Phase 4 — Better tools
 
