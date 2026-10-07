@@ -1,69 +1,38 @@
 # Roadmap
 
 Goal: a self-hosted remote MCP connector that lets Claude (web, desktop, mobile, Claude Code) work with
-an Anytype workspace — easy to deploy on a VPS, safe to expose, painless to update, good enough to
-publish as open source and submit to the Claude connectors directory.
+an Anytype workspace — easy to deploy, safe to expose, painless to update, good enough to publish as
+open source and submit to the Claude connectors directory.
 
-Production target: `https://anytype.example.com/mcp`.
+Production: `https://anytype.example.com/mcp`. Details, commands and lessons learned: `CLAUDE.md`.
+Each open item links to a GitHub issue with context and a definition of done.
 
-## Architecture (VPS)
+## Done
 
-```
-Claude ──HTTPS──▶ Caddy (TLS, :443) ──▶ connector (:3000, OAuth + MCP) ──▶ anytype-cli (:31012, JSON API v2)
-                                                                                    │
-                                                                         any-sync network (E2E-encrypted sync)
-```
+- MCP server with 11 Anytype v2 tools (search, fetch as markdown/outline/blocks, types, properties,
+  options, op schemas, create with markdown, atomic edit ops, delete), tool annotations
+- MCP protocol 2026-07-28 (`server/discover`) via SDK v2; 2025-era clients served statelessly
+- OAuth 2.1 for the owner: DCR, S256 PKCE, consent page with owner password, 1 h access tokens bound to
+  the resource, rotating refresh tokens with reuse detection, redirect allowlist
+- Docker stack (anytype-cli + connector, optional Caddy), `setup.sh` / `update.sh` (readiness check +
+  rollback) / `backup.sh`, nginx template, docs
+- Proxy overlay for networks where Anytype sync is blocked (tun2socks + host SOCKS bridge)
+- Production rollout on the home server; OAuth e2e passes against production; claude.ai connected
+- CI: typecheck, build, Docker image, compose validation, shellcheck
+- Home page, icons, `robots.txt`, Search Console verification hook
+- Version audit (Oct 2026): Node 24, current actions/images, SDK v2
 
-Three containers in one `docker compose` project; only Caddy publishes ports. Data lives in named
-volumes (`anytype-data`, `connector-data`, `caddy-data`).
+## Next (in order)
 
-## Phase 1 — Deployable stack
+1. **OAuth currency** — CIMD, `iss` (RFC 9207), own authorization server, drop SDK v1 — #1 *(in progress)*
+2. **Release pipeline** — tag → multi-arch image on GHCR → server pulls — #2
+3. **Restore drill** — verify backups actually restore — #3
+4. **Tests** — unit (mocked API) + e2e on the test space, in CI — #4
+5. **Tool UX** — compact outputs, error hints, collections, comments/chats, `ttlMs` — #5
+6. **Open source** — README, LICENSE, SECURITY, privacy policy, strip private notes — #7
+7. **Directory** — Anyproto permission, submission materials — #8
 
-- [x] MCP server, Anytype v2 tools, OAuth 2.1 (DCR, PKCE, rotating refresh tokens)
-- [x] Dockerfile for the connector (multi-stage, non-root, healthcheck)
-- [x] `docker-compose.yml`: anytype-cli + connector + Caddy, `.env` template, pinned versions
-- [x] Config for running behind a proxy (`TRUST_PROXY`), graceful shutdown, request logging
-- [x] `/healthz` (liveness) and `/readyz` (Anytype reachable + key valid)
-- [x] `deploy/setup.sh`: log anytype-cli in with an account key, create a scoped API key
-- [x] Deployment guide (`docs/deploy.md`)
+## Known issues
 
-## Phase 2 — VPS rollout
-
-- [x] DNS `anytype.example.com` → VPS (host nginx + certbot)
-- [x] First deploy, Anytype login, spaces synced (through the VLESS proxy overlay)
-- [x] OAuth e2e against production
-- [ ] Connect from claude.ai and use it from the phone
-
-## Phase 3 — Updates and operations
-
-- [ ] GitHub repository, CI (typecheck, tests) on every push
-- [ ] Release workflow: tag → multi-arch image on GHCR
-- [x] `deploy/update.sh`: pull pinned versions, restart, verify `/readyz`, roll back on failure
-- [x] Backups of volumes (`deploy/backup.sh`); restore procedure to be tested
-- [x] Version shown in `/healthz` and MCP server info
-
-## Phase 3.5 — Protocol and auth currency (MCP 2026-07-28)
-
-- [x] Serve MCP 2026-07-28 (`server/discover`, stateless envelopes) via SDK v2, legacy 2025 clients still work
-- [ ] OAuth: `iss` in authorization responses (RFC 9207) + `authorization_response_iss_parameter_supported`
-- [ ] OAuth: Client ID Metadata Documents (CIMD) — DCR is deprecated in 2026-07-28
-- [ ] Own authorization-server handlers, drop the v1 SDK dependency
-- [ ] `ttlMs`/`cacheScope` hints for `tools/list` (static tool set)
-
-## Phase 4 — Better tools
-
-- [ ] Unit tests with a mocked Anytype API; e2e suite against a dedicated test space
-- [ ] Compact, model-friendly outputs (search snippets, last modified, object links, pagination hints)
-- [ ] Error messages with next-step hints
-- [ ] Collections and lists (add/remove items, views, queries)
-- [ ] Comments / discussions and chats
-- [ ] Templates, file upload/download where useful
-- [ ] Evaluate with real conversations and refine tool descriptions
-
-## Phase 5 — Open source and directory
-
-- [ ] README, LICENSE, SECURITY.md, CONTRIBUTING.md
-- [ ] Privacy policy page
-- [ ] CIMD (Client ID Metadata Document) support
-- [ ] Icon and listing materials
-- [ ] Reach out to Anyproto about a directory listing
+- Connector icon depends on Google indexing the domain — #6
+- Local desktop key `API_TEST` stopped resolving its space — #9
