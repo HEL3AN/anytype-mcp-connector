@@ -101,7 +101,12 @@ owner's real spaces.
   envelope). SDK v1 answered 400 → we moved to SDK v2. The v2 SDK has **no OAuth authorization server**.
 - DCR is **deprecated** in 2026-07-28 in favor of CIMD; authorization servers SHOULD send `iss` (RFC 9207).
   Claude uses CIMD only if AS metadata has `client_id_metadata_document_supported: true` **and** `none` in
-  `token_endpoint_auth_methods_supported`. Claude Code CIMD: `https://claude.ai/oauth/claude-code-client-metadata`.
+  `token_endpoint_auth_methods_supported`. CIMD client ids seen in production: claude.ai/desktop/mobile `https://claude.ai/oauth/mcp-oauth-client-metadata`
+  (redirect `https://claude.ai/api/mcp/auth_callback`), Claude Code `https://claude.ai/oauth/claude-code-client-metadata`.
+- claude.ai answers Russian IPs with a 302 geo redirect: on the production server the connector must reach it
+  through the proxy overlay (it does — connector shares egress's netns).
+- Running prod `oauth-e2e` from the owner's PC shares the owner's IP; the consent limiter counts only failures,
+  but don't loop it.
 - Claude caches discovery metadata ~5 min.
 - If a Claude surface can't connect after the CIMD switch, look for `CIMD client rejected: <url> — <reason>`
   in the connector log; a new metadata host may need adding to `CIMD_TRUSTED_HOSTS`.
