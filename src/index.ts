@@ -71,6 +71,7 @@ const landingPage = renderLandingPage({
   mcpUrl: config.mcpUrl.href,
   iconUrl: new URL("/icon-128.png", config.publicUrl).href,
   version: config.version,
+  googleSiteVerification: process.env.GOOGLE_SITE_VERIFICATION?.trim() || undefined,
 });
 app.get("/", (_req, res) => {
   res

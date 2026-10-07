@@ -37,6 +37,9 @@ services:
       # Exactly one proxy (Caddy) sits in front of the connector.
       TRUST_PROXY: "1"
       EXTRA_REDIRECT_URIS: ${EXTRA_REDIRECT_URIS:-}
+      # Optional: Google Search Console "HTML tag" token, so Google indexes the home page and its icon
+      # (Claude shows connector icons from Google's favicon service).
+      GOOGLE_SITE_VERIFICATION: ${GOOGLE_SITE_VERIFICATION:-}
     # Published on loopback only, for a reverse proxy running on the host (nginx, ...).
     # With the bundled Caddy (COMPOSE_PROFILES=caddy) this port is not needed but harmless.
     ports:

@@ -2,9 +2,18 @@ const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 /** Public home page: lets browsers and favicon crawlers find the icon, and tells visitors what this is. */
-export function renderLandingPage(view: { mcpUrl: string; iconUrl: string; version: string }) {
+export function renderLandingPage(view: {
+  mcpUrl: string;
+  iconUrl: string;
+  version: string;
+  /** Google Search Console "HTML tag" verification token (content attribute). */
+  googleSiteVerification?: string;
+}) {
   const mcpUrl = escapeHtml(view.mcpUrl);
   const iconUrl = escapeHtml(view.iconUrl);
+  const verification = view.googleSiteVerification
+    ? `\n<meta name="google-site-verification" content="${escapeHtml(view.googleSiteVerification)}">`
+    : "";
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -17,7 +26,7 @@ export function renderLandingPage(view: { mcpUrl: string; iconUrl: string; versi
 <link rel="apple-touch-icon" href="/icon-128.png">
 <meta property="og:title" content="Anytype for Claude">
 <meta property="og:description" content="Self-hosted MCP connector for your Anytype workspace.">
-<meta property="og:image" content="${iconUrl}">
+<meta property="og:image" content="${iconUrl}">${verification}
 <style>
   :root { --bg:#f6f6f4; --card:#fff; --text:#1d1d1b; --muted:#6b6b66; --border:#e2e2dd; --code:#efefeb; }
   @media (prefers-color-scheme: dark) {
