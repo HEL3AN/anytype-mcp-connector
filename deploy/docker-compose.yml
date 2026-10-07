@@ -51,7 +51,7 @@ services:
   # Optional TLS reverse proxy for servers that don't run one: set COMPOSE_PROFILES=caddy in .env.
   caddy:
     profiles: [caddy]
-    image: ${CADDY_IMAGE:-caddy:2.10-alpine}
+    image: ${CADDY_IMAGE:-caddy:2.11-alpine}
     restart: unless-stopped
     depends_on: [connector]
     ports:
