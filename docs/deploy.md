@@ -57,8 +57,10 @@ logs repeat `can't sync with peer` / `no recent network activity`. TCP connects,
 sync nodes is filtered (common with DPI-based blocking).
 
 The anytype-heart networking code has no proxy support, so `deploy/compose.proxy.yml` routes
-anytype's traffic transparently: anytype runs in the network namespace of a tun2socks container
-(`egress`) that sends everything outside the Docker network through a SOCKS5 proxy. Enable it in
+traffic transparently: anytype **and the connector** run in the network namespace of a tun2socks
+container (`egress`) that sends everything outside the Docker network through a SOCKS5 proxy. The
+connector needs it too: it fetches Claude's OAuth client metadata from `claude.ai`, which redirects
+requests from some regions (e.g. Russia) to an "unavailable" page. Enable it in
 `deploy/.env`:
 
 ```bash
