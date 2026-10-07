@@ -193,7 +193,15 @@ export class OAuthServer {
 
     const urlencoded = express.urlencoded({ extended: false, limit: "64kb" });
     router.all("/authorize", limiter(15, 100), urlencoded, (req, res) => void this.authorize(req, res));
-    router.post("/oauth/consent", limiter(15, 10), urlencoded, (req, res) => this.consent(req, res));
+    // Brute-force guard: only failed attempts (wrong password, expired request) count.
+    const consentLimiter = rateLimit({
+      windowMs: 15 * 60_000,
+      limit: 10,
+      skipSuccessfulRequests: true,
+      standardHeaders: true,
+      legacyHeaders: false,
+    });
+    router.post("/oauth/consent", consentLimiter, urlencoded, (req, res) => this.consent(req, res));
     router.options(["/token", "/register", "/revoke"], publicCors);
     router.post("/token", publicCors, limiter(1, 60), urlencoded, (req, res) => void this.token(req, res));
     router.post("/register", publicCors, limiter(60, 20), express.json({ limit: "64kb" }), (req, res) =>
