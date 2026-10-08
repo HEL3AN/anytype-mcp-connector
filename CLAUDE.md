@@ -60,8 +60,8 @@ provenance), smoke-tests `/healthz` and creates a GitHub release. Production run
 (`CONNECTOR_IMAGE` in `deploy/.env`); `update.sh` pulls it.
 
 Local Anytype desktop API: `http://127.0.0.1:31009` (v2 since desktop 0.57.4). `.env.local` holds a
-scoped key **API_TEST** that may only touch the test space `API_TEST` — do writes there, never in the
-owner's real spaces.
+scoped key for the test space `API_TEST` only — do writes there, never in the owner's real spaces.
+(The old key was deleted; ask the owner for a new one when needed, #9.)
 
 ## Production (home server)
 
@@ -74,7 +74,8 @@ owner's real spaces.
   Server code changes therefore reach production only through a release tag.
 - `deploy/.env` (mode 600, never print it): `DOMAIN`, `OWNER_PASSWORD`, `ANYTYPE_API_KEY`,
   `COMPOSE_FILE=docker-compose.yml:compose.proxy.yml`, `COMPOSE_PROFILES=host-proxy`,
-  `HOST_PROXY_PORT=10808`, `GOOGLE_SITE_VERIFICATION`. Read a value without printing it, e.g.
+  `HOST_PROXY_PORT=10808`, `GOOGLE_SITE_VERIFICATION`,
+  `CONNECTOR_IMAGE=ghcr.io/hel3an/anytype-mcp-connector:latest` (the GHCR package is public). Read a value without printing it, e.g.
   `export OWNER_PASSWORD="$(ssh ... "grep ^OWNER_PASSWORD= .../deploy/.env | cut -d= -f2- | sed ...")"`.
 - Host nginx owns 80/443 (many other sites!). Our site: `/etc/nginx/sites-available/anytype.example.com`
   → `127.0.0.1:3040`, certificate via certbot. Don't touch other sites.
