@@ -21,6 +21,8 @@ Security hardening after an external-style review and a scan of the whole toolch
 - Scripts: API key no longer visible in `ps` during setup, `umask 077`, input validation.
 - nginx example: HSTS and `nosniff`.
 - Landing page: **Add to Claude** button (prefilled custom-connector dialog).
+- Owner password compared with scrypt; runtime image without npm/yarn (no CVEs from their bundled
+  dependencies), base image pinned by digest.
 - CI/CD: actions pinned by SHA, least-privilege permissions, `npm audit` + signatures, dependency
   review, zizmor, Trivy (image and config), OpenSSF Scorecard, signed build provenance attestations.
 
