@@ -28,6 +28,10 @@ updates:
   - package-ecosystem: gomod
     directory: /tools/derive-account-key
     schedule: { interval: weekly }
+    ignore:
+      # Kept at the version anytype-heart uses (key format must match); the proxy also lists a
+      # broken v0.28.0 that makes updates fail.
+      - dependency-name: github.com/anyproto/any-sync
     # Let fresh releases age a week first (malicious versions are usually pulled within days).
     cooldown: { default-days: 7 }
     groups:
