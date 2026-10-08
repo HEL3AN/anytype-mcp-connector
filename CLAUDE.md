@@ -85,6 +85,12 @@ writes there and refuses any other space. Never point tests at real spaces.
 - A discussion (comments) is a chat: `POST objects/{id}/discussion` is idempotent and returns the
   `chat_id`; objects expose it as `discussion`. Collections vs queries: the wrong endpoint answers 400
   with a `see_also` to the right one (`anytype_list_items` falls back automatically).
+- Full-text search lags object creation by a few seconds (indexing is async): poll, don't assume.
+- The API answers a trailing-slash path with **301** to the canonical route, and axios/follow-redirects
+  replay DELETE/PATCH with the body on 301. Combined with URL dot-segment normalization this is why
+  `seg()` refuses `.`/`..` ids.
+- anytype-cli v0.4.0 (heart v0.51.3) is current as of 2026-10; heart 0.51.4/0.51.5 (chat status,
+  markdown in v2 chat text, reconnect after sleep) arrive with the next CLI release — re-run e2e then.
 - `DELETE` only works for objects created by a **named** API key; `is_archived` is output-only, so
   objects made by an unnamed key can only be removed in the app.
 - Legacy unscoped keys work but every response carries a deprecation notice; scoped keys are v2-only.
@@ -117,9 +123,24 @@ writes there and refuses any other space. Never point tests at real spaces.
 - **Connector icons come from Google's favicon service** (Claude docs, "Network requirements"), not from
   the server or `serverInfo.icons`. Custom connectors show Google's favicon for the domain; Google must
   index the site first (Search Console verified via `GOOGLE_SITE_VERIFICATION`).
+- Limits (claude.com/docs, code.claude.com/docs): claude.ai tool results ~150,000 chars (larger results go
+  to a file); Claude Code 25k tokens / 50,000 chars unless `_meta["anthropic/maxResultSizeChars"]`; Claude
+  Code truncates tool descriptions and server instructions at **2,048 chars** (a test enforces this).
+- `_meta["anthropic/requiresUserInteraction"]: true` makes Claude Code prompt on every call (used on delete).
+- Prefilled install link: `https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=…&connectorUrl=<percent-encoded>`
+  (the landing page's **Add to Claude** button).
+- Connectors directory (claude.ai/directory/manage): annotations + title on every tool, OAuth, docs URL,
+  privacy policy URL, test account, icon; the "first-party API" acknowledgment means a listing needs
+  Anyproto's permission (#8). Escalations: mcp-review@anthropic.com.
 - Always check the latest versions/changelogs of SDKs, specs, actions and images before building on them.
 
 **Tooling**
+- Security checks: CI (`npm audit` + signatures, govulncheck, dependency review), `security.yml` (zizmor,
+  Trivy by digest on the latest image and config), `scorecard.yml`, CodeQL default setup, Dependabot
+  (7-day cooldown; Node majors and any-sync by hand). Findings: Security tab. Dismiss false positives
+  with a reason (done for CodeQL's HMAC "password hash" heuristics).
+- Locally: `pinact run` (pin actions), `zizmor .github/workflows/`, `go run golang.org/x/vuln/cmd/govulncheck@v1.8.0`,
+  OSV-Scanner; release images: `gh attestation verify oci://ghcr.io/hel3an/anytype-mcp-connector:<v> --owner HEL3AN`.
 - Repo enforces LF (`.gitattributes`); Python file writes must use `newline='\n'`.
 - CI runs shellcheck on `deploy/*.sh` — keep it clean.
 
