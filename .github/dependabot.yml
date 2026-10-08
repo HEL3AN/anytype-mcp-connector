@@ -3,6 +3,8 @@ updates:
   - package-ecosystem: npm
     directory: /
     schedule: { interval: weekly }
+    # Let fresh releases age a week first (malicious versions are usually pulled within days).
+    cooldown: { default-days: 7 }
     ignore:
       # Node majors are adopted deliberately, once they reach LTS (with the Docker base image).
       - dependency-name: "@types/node"
@@ -13,18 +15,26 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
+    # Let fresh releases age a week first (malicious versions are usually pulled within days).
+    cooldown: { default-days: 7 }
   - package-ecosystem: docker
     directory: /
     schedule: { interval: weekly }
+    # Let fresh releases age a week first (malicious versions are usually pulled within days).
+    cooldown: { default-days: 7 }
     ignore:
       - dependency-name: node
         update-types: ["version-update:semver-major"]
   - package-ecosystem: gomod
     directory: /tools/derive-account-key
     schedule: { interval: weekly }
+    # Let fresh releases age a week first (malicious versions are usually pulled within days).
+    cooldown: { default-days: 7 }
     groups:
       go:
         patterns: ["*"]
   - package-ecosystem: docker-compose
     directory: /deploy
     schedule: { interval: weekly }
+    # Let fresh releases age a week first (malicious versions are usually pulled within days).
+    cooldown: { default-days: 7 }

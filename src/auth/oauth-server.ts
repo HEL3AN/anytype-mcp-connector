@@ -2,7 +2,8 @@
 // Client ID Metadata Documents (preferred) and Dynamic Client Registration (deprecated, kept for
 // compatibility), S256 PKCE, RFC 9207 `iss`, RFC 8707 resource binding, rotating refresh tokens.
 // Every authorization is approved by the owner on a consent page with the owner password.
-import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
 import express, { type Request, type RequestHandler, type Response } from "express";
 import { rateLimit } from "express-rate-limit";
 import { CimdError, CimdResolver, isCimdClientId } from "./cimd.js";
@@ -84,6 +85,9 @@ const MAX_PENDING = 1000;
 const CODE_TTL_MS = 60 * 1000;
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
+const scryptAsync = promisify(scrypt) as (password: string, salt: Buffer, keylen: number) => Promise<Buffer>;
+/** Per-process key for constant-time comparison of secrets (the digest is never stored). */
+const COMPARE_KEY = randomBytes(32);
 const sha256hex = (value: string) => createHash("sha256").update(value).digest("hex");
 const b64url = (buf: Buffer | string) => Buffer.from(buf).toString("base64url");
 const nowSec = () => Math.floor(Date.now() / 1000);
@@ -122,13 +126,15 @@ export class OAuthServer {
   private readonly cimd: CimdResolver;
   private readonly pending = new Map<string, PendingAuthorization>();
   private readonly codes = new Map<string, AuthorizationCode>();
-  private readonly passwordHash: Buffer;
+  /** scrypt of the owner password with a per-process salt: each guess costs real work. */
+  private readonly passwordHash: Promise<Buffer>;
+  private readonly passwordSalt = randomBytes(16);
   private readonly issuer: string;
 
   constructor(private readonly opts: OAuthServerOptions) {
     this.store = new AuthStore(opts.dataDir);
     this.cimd = opts.cimdResolver ?? new CimdResolver(opts.cimdTrustedHosts);
-    this.passwordHash = createHash("sha256").update(opts.ownerPassword).digest();
+    this.passwordHash = scryptAsync(opts.ownerPassword, this.passwordSalt, 32);
     this.issuer = opts.issuer.href;
   }
 
@@ -185,12 +191,13 @@ export class OAuthServer {
     const limiter = (windowMin: number, limit: number) =>
       rateLimit({ windowMs: windowMin * 60_000, limit, standardHeaders: true, legacyHeaders: false });
 
-    router.use("/.well-known/oauth-authorization-server", publicCors, (_req, res) => {
+    const metadataLimiter = limiter(1, 300);
+    router.use("/.well-known/oauth-authorization-server", metadataLimiter, publicCors, (_req, res) => {
       res.json(this.authorizationServerMetadata());
     });
     const resourcePath = this.opts.resource.pathname === "/" ? "" : this.opts.resource.pathname;
     for (const path of new Set([`/.well-known/oauth-protected-resource${resourcePath}`, "/.well-known/oauth-protected-resource"])) {
-      router.use(path, publicCors, (_req, res) => {
+      router.use(path, metadataLimiter, publicCors, (_req, res) => {
         res.json(this.protectedResourceMetadata());
       });
     }
@@ -214,7 +221,7 @@ export class OAuthServer {
       standardHeaders: true,
       legacyHeaders: false,
     });
-    router.post("/oauth/consent", consentLimiter, globalConsentLimiter, urlencoded, (req, res) => this.consent(req, res));
+    router.post("/oauth/consent", consentLimiter, globalConsentLimiter, urlencoded, (req, res) => void this.consent(req, res));
     router.options(["/token", "/register", "/revoke"], publicCors);
     router.post("/token", publicCors, limiter(1, 60), urlencoded, (req, res) => void this.token(req, res));
     router.post("/register", publicCors, limiter(60, 20), express.json({ limit: "64kb" }), (req, res) =>
@@ -319,7 +326,7 @@ export class OAuthServer {
     sendHtml(res, renderLoginPage(this.consentView(requestId, client, redirectUri)));
   }
 
-  private consent(req: Request, res: Response) {
+  private async consent(req: Request, res: Response) {
     res.set("Cache-Control", "no-store");
     const { request_id, password, action } = req.body as Record<string, string | undefined>;
     const pending = request_id ? this.pending.get(request_id) : undefined;
@@ -332,7 +339,7 @@ export class OAuthServer {
       this.redirectWith(res, pending.redirectUri, { error: "access_denied", error_description: "The owner denied access", state: pending.state });
       return;
     }
-    if (!this.checkPassword(password ?? "")) {
+    if (!(await this.checkPassword(password ?? ""))) {
       console.warn("Consent: wrong owner password");
       sendHtml(res.status(401), renderLoginPage({ ...this.consentView(request_id!, pending.client, pending.redirectUri), error: "Wrong password" }));
       return;
@@ -587,8 +594,9 @@ export class OAuthServer {
     return createHmac("sha256", this.store.signingKey).update(data).digest("base64url");
   }
 
-  private checkPassword(input: string) {
-    return timingSafeEqual(createHash("sha256").update(input).digest(), this.passwordHash);
+  private async checkPassword(input: string) {
+    const [expected, given] = await Promise.all([this.passwordHash, scryptAsync(input, this.passwordSalt, 32)]);
+    return timingSafeEqual(given, expected);
   }
 
   private sweep() {
@@ -598,9 +606,10 @@ export class OAuthServer {
   }
 }
 
+/** Constant-time comparison of two secrets of any length (HMAC first, so lengths always match). */
 function safeEqual(a: string, b: string) {
-  const x = createHash("sha256").update(a).digest();
-  const y = createHash("sha256").update(b).digest();
+  const x = createHmac("sha256", COMPARE_KEY).update(a).digest();
+  const y = createHmac("sha256", COMPARE_KEY).update(b).digest();
   return timingSafeEqual(x, y);
 }
 

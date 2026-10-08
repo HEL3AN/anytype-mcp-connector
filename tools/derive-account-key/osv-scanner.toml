@@ -1,0 +1,5 @@
+# Read by OSV-Scanner (and OpenSSF Scorecard's Vulnerabilities check).
+
+[[IgnoredVulns]]
+id = "GO-2026-5932"
+reason = "Advisory for the whole deprecated golang.org/x/crypto/openpgp package (no fix exists). This tool does not import it; govulncheck confirms no affected code is reachable."

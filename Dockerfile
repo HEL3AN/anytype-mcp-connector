@@ -2,7 +2,7 @@
 
 # The build stage runs on the builder's native platform: the output (dist + production node_modules)
 # is plain JavaScript, so it is identical for every target architecture.
-FROM --platform=$BUILDPLATFORM node:24-alpine AS build
+FROM --platform=$BUILDPLATFORM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -10,7 +10,7 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build && npm prune --omit=dev
 
-FROM node:24-alpine
+FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
 LABEL org.opencontainers.image.source="https://github.com/HEL3AN/anytype-mcp-connector" \
       org.opencontainers.image.description="Remote MCP server that connects Claude to Anytype" \
       org.opencontainers.image.licenses="MIT"
@@ -23,7 +23,11 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
 COPY public ./public
-RUN mkdir -p /data && chown node:node /data
+# The runtime needs only node: drop package managers (and the CVEs in their bundled dependencies).
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+      /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn-* \
+      /usr/local/bin/yarn /usr/local/bin/yarnpkg \
+ && mkdir -p /data && chown node:node /data
 USER node
 VOLUME ["/data"]
 EXPOSE 3000
