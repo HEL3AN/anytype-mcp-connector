@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Update the stack: ./update.sh [--no-pull-repo]
+# Update the stack: ./update.sh [--no-pull-repo] [--backup | --no-backup]
 # Pulls the repository and the pinned images, then either pulls the released connector image
 # (CONNECTOR_IMAGE=ghcr.io/...:<tag> in .env) or rebuilds it from this checkout (default), restarts,
 # and checks readiness. If the new connector does not become ready, the previous image is restored.
+# When the Anytype image changes (it may migrate its data, which can't be undone), a backup is taken
+# first (backup.sh); restore it with ./restore.sh if the new Anytype misbehaves.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -19,13 +21,30 @@ running_version() {
   compose exec -T connector node -p "require('./package.json').version" 2>/dev/null || echo "?"
 }
 
+pull_repo=true backup=auto
+for arg in "$@"; do
+  case "$arg" in
+    --no-pull-repo) pull_repo=false ;;
+    --backup) backup=always ;;
+    --no-backup) backup=never ;;
+    *) echo "Unknown option: $arg"; exit 1 ;;
+  esac
+done
+
+# Image of the anytype service as configured (compose also lists its network_mode dependency).
+anytype_image() {
+  compose config anytype 2>/dev/null |
+    awk '/^  anytype:$/ {s=1; next} s && /^  [^ ]/ {s=0} s && /^    image:/ {print $2; exit}'
+}
+image_id() { docker image inspect --format '{{.Id}}' "$1" 2>/dev/null || true; }
+
 image=$(env_value CONNECTOR_IMAGE || true)
 image=${image:-anytype-mcp-connector:local}
 # A registry reference (contains "/") means: use released images instead of building locally.
 released=false
 [[ "$image" == */* ]] && released=true
 
-if [ "${1:-}" != "--no-pull-repo" ] && git -C .. rev-parse --git-dir >/dev/null 2>&1; then
+if $pull_repo && git -C .. rev-parse --git-dir >/dev/null 2>&1; then
   echo "==> Pulling repository"
   git -C .. pull --ff-only
 fi
@@ -39,6 +58,13 @@ fi
 
 echo "==> Pulling images"
 compose pull --ignore-buildable
+
+running=$(compose ps -q anytype 2>/dev/null | xargs -r docker inspect --format '{{.Image}}' 2>/dev/null || true)
+target=$(image_id "$(anytype_image)")
+if [ "$backup" = always ] || { [ "$backup" = auto ] && [ -n "$running" ] && [ "$running" != "$target" ]; }; then
+  echo "==> Backing up first (Anytype image changes or --backup)"
+  ./backup.sh
+fi
 if $released; then
   docker pull "$image"
   echo "==> Restarting"

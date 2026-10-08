@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Back up all persistent volumes and deploy/.env to deploy/backups/<timestamp>.tar.gz: ./backup.sh
-# Keeps the newest BACKUP_KEEP archives (default 14, 0 = keep all). Safe to run from cron.
+# Keeps the newest BACKUP_KEEP archives (default 3, 0 = keep all). Safe to run from cron.
 # WARNING: the archive contains your Anytype account credentials, local data, the API key and the owner
 # password. Store it encrypted. Restore with ./restore.sh (see docs/deploy.md).
 set -euo pipefail
@@ -27,7 +27,7 @@ docker run --rm "${mounts[@]}" -v "$PWD/backups:/backups" -e OWNER="$(id -u):$(i
   "$stamp" "${volumes[@]}"
 echo "Backup written to deploy/backups/${stamp}.tar.gz"
 
-keep=${BACKUP_KEEP:-14}
+keep=${BACKUP_KEEP:-3}
 if [ "$keep" -gt 0 ]; then
   find backups -maxdepth 1 -name '*.tar.gz' -printf '%f
 ' | sort -r | tail -n +"$((keep + 1))" |

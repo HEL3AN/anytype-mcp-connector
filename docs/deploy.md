@@ -98,7 +98,10 @@ cd anytype-mcp/deploy
 ```
 
 It pulls the repository and the pinned images, updates the connector, restarts the stack and checks
-`/readyz`. If the new connector fails to become ready, the previous image is restored.
+`/readyz`. If the new connector fails to become ready, the previous image is restored. When the
+Anytype image changes, it first takes a backup (`backup.sh`): a newer Anytype may migrate its data and
+cannot simply be rolled back, so if it misbehaves, pin the old `ANYTYPE_CLI_IMAGE` again and run
+`./restore.sh` with that archive. `--backup` forces a backup, `--no-backup` skips it.
 
 **Released images (recommended).** Every release publishes a multi-arch image (linux/amd64, linux/arm64)
 to GHCR, so the server does not need to build anything. In `deploy/.env`:
@@ -127,11 +130,22 @@ with an older one.
 ```
 
 Stops Anytype for a few seconds and writes `deploy/backups/<timestamp>.tar.gz` (mode 600) with all
-volumes — Anytype data and credentials, OAuth state, certificates — and `deploy/.env`. The newest 14
-archives are kept (`BACKUP_KEEP=<n>`, `0` keeps all). The archive gives full access to your Anytype
-account: copy it off the server encrypted, e.g. `age -p` or `gpg -c`.
+volumes — Anytype data and credentials, OAuth state, certificates — and `deploy/.env`. The newest 3
+archives are kept (`BACKUP_KEEP=<n>`, `0` keeps all).
 
-Nightly backups with cron (`crontab -e`, as the user that runs Docker):
+**What a backup is for.** Your notes are not only on the server: Anytype syncs them to the any-sync
+network and your other devices, and a fresh server downloads them again after login. A backup saves
+the *server's* state — the Anytype login, the API key, the OAuth state (Claude stays connected) and
+`.env` — so a broken update or a lost server is one `restore.sh` away instead of a new setup.
+
+- **Your own account:** the archive holds your account key, which gives full access to the account
+  and cannot be revoked. Keep few copies; the automatic snapshot before Anytype updates is usually
+  enough. If you copy archives off the server, encrypt them (`age -p`, `gpg -c`).
+- **A bot account:** a leaked archive only exposes the spaces the bot was invited to (remove it from
+  them to cut access), while losing the server means creating a new bot and re-inviting it everywhere.
+  Regular backups are cheap insurance here.
+
+Regular backups with cron (`crontab -e`, as the user that runs Docker; Anytype pauses for ~10 s):
 
 ```cron
 30 4 * * * cd /path/to/anytype-mcp/deploy && ./backup.sh >> backups/backup.log 2>&1
