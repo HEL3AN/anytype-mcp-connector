@@ -42,7 +42,15 @@ export function createApp(config: Config, options: AppOptions = {}) {
         instructions:
           "Tools for the user's Anytype workspace (a local-first, end-to-end encrypted knowledge base). " +
           "Start with anytype_search or anytype_list_spaces, read with anytype_fetch, " +
-          "edit with anytype_edit_object (prefer replace_text / insert_blocks with markdown).",
+          "edit with anytype_edit_object (prefer replace_text / insert_blocks with markdown). " +
+          "Collections and queries (sets) list their items with anytype_list_items; " +
+          "comments on an object: anytype_list_comments / anytype_add_comment. " +
+          "Errors include hints with the next tool call to make.",
+        // The tool set is static per release: let 2026-07-28 clients cache the listing.
+        cacheHints: {
+          "tools/list": { ttlMs: 60 * 60 * 1000, cacheScope: "public" },
+          "server/discover": { ttlMs: 60 * 60 * 1000, cacheScope: "public" },
+        },
       },
     );
     registerTools(server, api);

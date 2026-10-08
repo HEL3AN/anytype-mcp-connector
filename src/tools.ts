@@ -1,6 +1,7 @@
 import type { CallToolResult, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { AnytypeApiError, type AnytypeClient, seg } from "./anytype/client.js";
+import { formatApiError, formatIssues, type ApiIssue } from "./hints.js";
 
 const EDIT_OPS = [
   "set_properties",
@@ -20,31 +21,116 @@ const EDIT_OPS = [
   "remove_items",
 ] as const;
 
+/** Markdown returned by anytype_fetch per call unless max_chars says otherwise. */
+const DEFAULT_MAX_CHARS = 40_000;
+
 const spaceId = z.string().min(1).describe("Space id, as returned by anytype_list_spaces or search results");
 const objectId = z.string().min(1).describe("Object id");
+const listId = z.string().min(1).describe("Id of a collection or query (set)");
+const chatId = z.string().min(1).describe("Chat id, from anytype_list_chats");
 const limit = z.number().int().min(1).max(100).optional().describe("Page size (default 25)");
 const offset = z.number().int().min(0).optional().describe("Page offset (default 0)");
+const fields = z.array(z.string()).max(25).optional().describe("Extra property keys to include per row");
+const dryRun = z.boolean().optional().describe("Validate without changing anything");
 
-const ok = (data: unknown, extra?: Record<string, unknown>): CallToolResult => ({
-  content: [{ type: "text", text: JSON.stringify(extra ? { ...extra, ...(data as object) } : data, null, 2) }],
-});
+type Json = Record<string, unknown>;
+
+/**
+ * Successful result as compact JSON. List responses get `next_offset` when more pages exist, and
+ * Anytype's warnings are rendered with tool hints after the JSON.
+ */
+const ok = (data: unknown, extra?: Json): CallToolResult => {
+  let body = (extra ? { ...extra, ...(data as Json) } : data) as Json;
+  if (body && typeof body === "object" && !Array.isArray(body)) {
+    if (body.has_more === true && typeof body.offset === "number" && Array.isArray(body.data)) {
+      body = { ...body, next_offset: body.offset + body.data.length };
+    }
+    const warnings = body.warnings as ApiIssue[] | undefined;
+    if (Array.isArray(warnings) && warnings.length) {
+      const { warnings: _omit, ...rest } = body;
+      return text(`${JSON.stringify(rest)}\nwarnings:\n${formatIssues(warnings).join("\n")}`);
+    }
+  }
+  return text(JSON.stringify(body));
+};
+
+const text = (value: string): CallToolResult => ({ content: [{ type: "text", text: value }] });
 
 async function run(fn: () => Promise<CallToolResult>): Promise<CallToolResult> {
   try {
     return await fn();
   } catch (err) {
-    // Surface API errors verbatim: Anytype's messages explain how to fix the request.
-    const text =
+    // Anytype's errors explain how to fix the request; formatApiError adds the matching tool calls.
+    const message =
       err instanceof AnytypeApiError
-        ? `${err.message}\n${JSON.stringify(err.body, null, 2)}`
-        : `Error: ${err instanceof Error ? err.message : String(err)}`;
-    return { isError: true, content: [{ type: "text", text }] };
+        ? formatApiError(err.status, err.body)
+        : err instanceof Error && err.name === "TimeoutError"
+          ? "Error: Anytype did not answer in time. It may be starting or syncing; try again shortly."
+          : `Error: ${err instanceof Error ? err.message : String(err)}`;
+    return { isError: true, content: [{ type: "text", text: message }] };
   }
 }
 
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+const ADDITIVE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
+
+const isWrongListKind = (err: unknown) =>
+  err instanceof AnytypeApiError &&
+  err.status === 400 &&
+  JSON.stringify(err.body).includes('"op":"get_query_objects"') &&
+  !JSON.stringify(err.body).includes("neither a query nor a collection");
+
+/** Reads a collection's or a query's endpoint, whichever `id` is. */
+async function listEndpoint<T>(api: AnytypeClient, space_id: string, id: string, what: "objects" | "views", query: Json) {
+  const base = `/v2/spaces/${seg(space_id)}`;
+  const q = query as Record<string, string | number | boolean | undefined>;
+  try {
+    return await api.get<T>(`${base}/collections/${seg(id)}/${what}`, q);
+  } catch (err) {
+    if (!isWrongListKind(err)) throw err;
+    return api.get<T>(`${base}/queries/${seg(id)}/${what}`, q);
+  }
+}
+
+interface ChatMessage {
+  id: string;
+  at?: string;
+  author?: string;
+  text?: string;
+  blocks_text?: string;
+  reply_to?: string;
+  edited_at?: string;
+  reactions?: Record<string, number>;
+  attachments?: unknown[];
+}
+
+/** Drops ordering keys, author ids and reaction voters: a model needs who, when and what. */
+function compactMessages(res: { messages?: ChatMessage[] } & Json) {
+  const { messages = [], state: _state, ...rest } = res;
+  return {
+    ...rest,
+    messages: messages.map((m) => ({
+      id: m.id,
+      at: m.at,
+      author: m.author,
+      text: m.text || m.blocks_text,
+      ...(m.reply_to ? { reply_to: m.reply_to } : {}),
+      ...(m.edited_at ? { edited_at: m.edited_at } : {}),
+      ...(m.reactions && Object.keys(m.reactions).length ? { reactions: m.reactions } : {}),
+      ...(m.attachments?.length ? { attachments: m.attachments } : {}),
+    })),
+  };
+}
+
+const readMessagesSchema = {
+  before: z.string().optional().describe("Return messages older than this cursor (next_before from a previous read)"),
+  after: z.string().optional().describe("Return messages newer than this cursor (next_after), oldest first"),
+  limit: z.number().int().min(1).max(100).optional().describe("Messages per page (default 25, newest page first)"),
+};
 
 export function registerTools(server: McpServer, api: AnytypeClient) {
+  // --- spaces, search, reading ------------------------------------------------------------------
+
   server.registerTool(
     "anytype_list_spaces",
     {
@@ -67,8 +153,8 @@ Omit space_id to search across all accessible spaces (rows then include space_id
   status IN ("In progress", "Blocked")
   tag HAS ALL ("urgent", "client")
   created_date > daysAgo(7)
-Select/tag values are option names. Operators: = != > < >= <= CONTAINS, NOT CONTAINS, IN, NOT IN, HAS ALL, IS [NOT] EMPTY, EXISTS; combine with AND/OR and parentheses.
-Use anytype_list_types / anytype_list_properties to discover type and property keys.`,
+Select/tag values are option names. Operators: = != > < >= <= CONTAINS, NOT CONTAINS, IN, NOT IN, HAS ALL, IS [NOT] EMPTY, EXISTS; combine with AND/OR and parentheses. Full grammar: anytype_get_schema {"kind":"filters"}.
+Use anytype_list_types / anytype_list_properties to discover type and property keys. When has_more is true, pass next_offset as offset.`,
       inputSchema: z.object({
         space_id: spaceId.optional(),
         query: z.string().max(4096).optional().describe("Full-text query over names and content"),
@@ -85,7 +171,7 @@ Use anytype_list_types / anytype_list_properties to discover type and property k
           .max(10)
           .optional()
           .describe('e.g. [{"property":"last_modified_date","direction":"desc"}]'),
-        fields: z.array(z.string()).max(25).optional().describe("Extra property keys to include per row"),
+        fields,
         limit,
         offset,
       }),
@@ -104,38 +190,55 @@ Use anytype_list_types / anytype_list_properties to discover type and property k
       title: "Fetch object",
       description: `Read one Anytype object.
 format:
-- "markdown" (default): properties + body as markdown. Best for reading.
+- "markdown" (default): properties + body as markdown. Best for reading. Long bodies come in pages of max_chars; continue with start = next_start.
 - "outline": every block's id, type, indent and first 80 chars. Use it to find block ids before editing a large object.
 - "blocks": full AnyBlock JSON (optionally only the subtree of \`block\`). Use for precise block-level edits.
-The returned etag can be passed as if_match to anytype_edit_object.`,
+The returned etag can be passed as if_match to anytype_edit_object. has_comments: read them with anytype_list_comments.`,
       inputSchema: z.object({
         space_id: spaceId,
         object_id: objectId,
         format: z.enum(["markdown", "outline", "blocks"]).optional(),
         block: z.string().optional().describe('Only with format "blocks": return just this block\'s subtree'),
+        start: z.number().int().min(0).optional().describe('Only with format "markdown": character offset to continue from'),
+        max_chars: z
+          .number()
+          .int()
+          .min(1000)
+          .max(200_000)
+          .optional()
+          .describe(`Only with format "markdown": characters per page (default ${DEFAULT_MAX_CHARS})`),
       }),
       annotations: READ_ONLY,
     },
-    ({ space_id, object_id, format = "markdown", block }) =>
+    ({ space_id, object_id, format = "markdown", block, start = 0, max_chars = DEFAULT_MAX_CHARS }) =>
       run(async () => {
         const path = `/v2/spaces/${seg(space_id)}/objects/${seg(object_id)}`;
         if (format === "markdown") {
           const [md, props] = await Promise.all([
             api.get<{ markdown: string; type: string; etag?: string }>(path, { format: "md" }),
-            api.get<{ properties?: unknown }>(path, { include: "properties" }),
+            api.get<{ properties?: unknown; discussion?: string }>(path, { include: "properties" }),
           ]);
+          const full = md.data.markdown ?? "";
+          const markdown = full.slice(start, start + max_chars);
+          const end = start + markdown.length;
           return ok({
             id: object_id,
             type: md.data.type,
             etag: md.etag ?? md.data.etag,
+            ...(props.data.discussion ? { has_comments: true } : {}),
             properties: props.data.properties,
-            markdown: md.data.markdown,
+            markdown,
+            ...(start > 0 || end < full.length
+              ? { truncated: { start, end, total_chars: full.length, ...(end < full.length ? { next_start: end } : {}) } }
+              : {}),
           });
         }
         const res = await api.get(path, format === "outline" ? { outline: true } : { block });
         return ok(res.data, { etag: res.etag });
       }),
   );
+
+  // --- schema ------------------------------------------------------------------------------------
 
   server.registerTool(
     "anytype_list_types",
@@ -188,6 +291,31 @@ The returned etag can be passed as if_match to anytype_edit_object.`,
   );
 
   server.registerTool(
+    "anytype_list_templates",
+    {
+      title: "List templates",
+      description:
+        "List object templates, optionally for one type. Pass a template id as `template` to anytype_create_object; `default` marks the one used when none is given.",
+      inputSchema: z.object({ space_id: spaceId, type: z.string().optional().describe("Type key, e.g. task"), limit, offset }),
+      annotations: READ_ONLY,
+    },
+    ({ space_id, type, limit, offset }) =>
+      run(async () => ok((await api.get(`/v2/spaces/${seg(space_id)}/templates`, { type, limit, offset })).data)),
+  );
+
+  server.registerTool(
+    "anytype_list_members",
+    {
+      title: "List members",
+      description: "List the members of a space (name, role, id). Member ids are the values of person properties such as assignee.",
+      inputSchema: z.object({ space_id: spaceId, limit, offset }),
+      annotations: READ_ONLY,
+    },
+    ({ space_id, limit, offset }) =>
+      run(async () => ok((await api.get(`/v2/spaces/${seg(space_id)}/members`, { limit, offset })).data)),
+  );
+
+  server.registerTool(
     "anytype_get_op_schema",
     {
       title: "Get edit operation schema",
@@ -197,6 +325,105 @@ The returned etag can be passed as if_match to anytype_edit_object.`,
     },
     ({ op }) => run(async () => ok((await api.get(`/v2/schemas/ops/${seg(op)}`)).data)),
   );
+
+  server.registerTool(
+    "anytype_get_schema",
+    {
+      title: "Get API schema",
+      description:
+        'Get one of Anytype\'s reference schemas, e.g. "filters" (the full filter grammar for search and queries). Omit kind to list the available kinds.',
+      inputSchema: z.object({ kind: z.string().min(1).optional() }),
+      annotations: READ_ONLY,
+    },
+    ({ kind }) => run(async () => ok((await api.get(kind ? `/v2/schemas/${seg(kind)}` : "/v2/schemas")).data)),
+  );
+
+  // --- collections and queries -------------------------------------------------------------------
+
+  server.registerTool(
+    "anytype_list_items",
+    {
+      title: "List collection or query items",
+      description: `List the objects in a collection (a hand-picked list) or a query (a saved search, called "set" in the app).
+Without view, a collection returns all its members in stored order; a query applies its first view's filters and sorts. Get view ids from anytype_list_views.`,
+      inputSchema: z.object({
+        space_id: spaceId,
+        list_id: listId,
+        view: z.string().optional().describe("View id whose filters and sorts apply"),
+        fields,
+        limit,
+        offset,
+      }),
+      annotations: READ_ONLY,
+    },
+    ({ space_id, list_id, view, fields, limit, offset }) =>
+      run(async () => {
+        const res = await listEndpoint(api, space_id, list_id, "objects", {
+          view,
+          fields: fields?.join(","),
+          limit,
+          offset,
+        });
+        return ok(res.data);
+      }),
+  );
+
+  server.registerTool(
+    "anytype_list_views",
+    {
+      title: "List views",
+      description: "List the views (table, board, gallery, ... with their filters and sorts) of a collection or query.",
+      inputSchema: z.object({ space_id: spaceId, list_id: listId, limit, offset }),
+      annotations: READ_ONLY,
+    },
+    ({ space_id, list_id, limit, offset }) =>
+      run(async () => ok((await listEndpoint(api, space_id, list_id, "views", { limit, offset })).data)),
+  );
+
+  server.registerTool(
+    "anytype_create_collection",
+    {
+      title: "Create collection",
+      description:
+        'Create a collection (a hand-picked list of objects). Later add or remove members with anytype_edit_object ops {"op":"add_items","items":[ids]} / {"op":"remove_items","items":[ids]}.',
+      inputSchema: z.object({
+        space_id: spaceId,
+        name: z.string().min(1).max(4096),
+        items: z.array(z.string()).max(1000).optional().describe("Object ids to put in the collection"),
+        dry_run: dryRun,
+      }),
+      annotations: ADDITIVE,
+    },
+    ({ space_id, dry_run, ...body }) =>
+      run(async () => ok((await api.post(`/v2/spaces/${seg(space_id)}/collections`, body, { dry_run })).data)),
+  );
+
+  server.registerTool(
+    "anytype_create_query",
+    {
+      title: "Create query (set)",
+      description: `Create a query (a saved search over one type, called "set" in the app). It always lists live objects of \`type\`, narrowed by \`filter\` (same grammar as anytype_search) and ordered by \`sorts\`.`,
+      inputSchema: z.object({
+        space_id: spaceId,
+        name: z.string().min(1).max(4096),
+        type: z.string().min(1).describe("Type key the query runs over, e.g. task"),
+        filter: z.string().max(4096).optional().describe('Compact filter, e.g. done = false AND due_date < daysAgo(-7)'),
+        sorts: z
+          .array(z.object({ property: z.string(), direction: z.enum(["asc", "desc"]).optional() }))
+          .max(10)
+          .optional(),
+        create_missing_options: z.boolean().optional().describe("Create select options the filter names but don't exist yet"),
+        dry_run: dryRun,
+      }),
+      annotations: ADDITIVE,
+    },
+    ({ space_id, dry_run, create_missing_options, ...body }) =>
+      run(async () =>
+        ok((await api.post(`/v2/spaces/${seg(space_id)}/queries`, body, { dry_run, create_missing_options })).data),
+      ),
+  );
+
+  // --- writing objects ----------------------------------------------------------------------------
 
   server.registerTool(
     "anytype_create_object",
@@ -211,11 +438,11 @@ properties maps property keys to values; select/tag values are option names, e.g
         name: z.string().max(4096).optional(),
         markdown: z.string().max(1_048_576).optional().describe("Body in markdown"),
         properties: z.record(z.string(), z.unknown()).optional(),
-        template: z.string().optional().describe('Template id, or "none". Omit to use the type\'s default template'),
+        template: z.string().optional().describe('Template id (anytype_list_templates), or "none". Omit to use the type\'s default template'),
         create_missing_options: z.boolean().optional().describe("Create select options that don't exist yet"),
-        dry_run: z.boolean().optional().describe("Validate without creating"),
+        dry_run: dryRun,
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+      annotations: ADDITIVE,
     },
     ({ space_id, create_missing_options, dry_run, ...body }) =>
       run(async () =>
@@ -235,6 +462,7 @@ Common ops:
 - {"op":"delete_block","match":"Obsolete section","recursive":true}
 - {"op":"set_properties","set":{"status":["Done"]},"add":{"tag":["Urgent"]},"unset":["due_date"]}
 - {"op":"set_type","type":"task"}
+- {"op":"add_items","items":["<object id>"]} — collections only
 Other ops: ${EDIT_OPS.join(", ")}. Call anytype_get_op_schema for any op's exact fields.
 Get block ids from anytype_fetch with format "outline". Pass if_match (etag from anytype_fetch) to avoid overwriting concurrent changes.`,
       inputSchema: z.object({
@@ -270,12 +498,115 @@ Get block ids from anytype_fetch with format "outline". Pass if_match (etag from
       title: "Delete object",
       description:
         "Move an object to the bin. Anytype only allows deleting objects that were created through this connector.",
-      inputSchema: z.object({ space_id: spaceId, object_id: objectId, dry_run: z.boolean().optional() }),
+      inputSchema: z.object({ space_id: spaceId, object_id: objectId, dry_run: dryRun }),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
     ({ space_id, object_id, dry_run }) =>
       run(async () =>
         ok((await api.delete(`/v2/spaces/${seg(space_id)}/objects/${seg(object_id)}`, { dry_run })).data),
       ),
+  );
+
+  // --- comments and chats -------------------------------------------------------------------------
+
+  server.registerTool(
+    "anytype_list_comments",
+    {
+      title: "List comments",
+      description: "Read the comments (discussion) on an object, newest page first. Continue with before = next_before.",
+      inputSchema: z.object({ space_id: spaceId, object_id: objectId, ...readMessagesSchema }),
+      annotations: READ_ONLY,
+    },
+    ({ space_id, object_id, before, after, limit }) =>
+      run(async () => {
+        const obj = await api.get<{ discussion?: string }>(
+          `/v2/spaces/${seg(space_id)}/objects/${seg(object_id)}`,
+          { include: "properties" },
+        );
+        if (!obj.data.discussion) return ok({ messages: [], message_count: 0 });
+        const res = await api.get<{ messages?: ChatMessage[] } & Json>(
+          `/v2/spaces/${seg(space_id)}/chats/${seg(obj.data.discussion)}/messages`,
+          { before, after, limit },
+        );
+        return ok(compactMessages(res.data), { chat_id: obj.data.discussion });
+      }),
+  );
+
+  server.registerTool(
+    "anytype_add_comment",
+    {
+      title: "Add comment",
+      description:
+        "Comment on an object (starts its discussion if needed). Text is markdown, up to 8000 characters. reply_to: a comment id to answer in a thread.",
+      inputSchema: z.object({
+        space_id: spaceId,
+        object_id: objectId,
+        text: z.string().min(1).max(8000),
+        reply_to: z.string().optional(),
+      }),
+      annotations: ADDITIVE,
+    },
+    ({ space_id, object_id, text: body, reply_to }) =>
+      run(async () => {
+        const discussion = await api.post<{ id: string }>(
+          `/v2/spaces/${seg(space_id)}/objects/${seg(object_id)}/discussion`,
+          undefined,
+        );
+        const res = await api.post(`/v2/spaces/${seg(space_id)}/chats/${seg(discussion.data.id)}/messages`, {
+          text: body,
+          reply_to,
+        });
+        return ok(res.data, { chat_id: discussion.data.id });
+      }),
+  );
+
+  server.registerTool(
+    "anytype_list_chats",
+    {
+      title: "List chats",
+      description: "List the chats in a space.",
+      inputSchema: z.object({ space_id: spaceId, limit, offset }),
+      annotations: READ_ONLY,
+    },
+    ({ space_id, limit, offset }) =>
+      run(async () => ok((await api.get(`/v2/spaces/${seg(space_id)}/chats`, { limit, offset })).data)),
+  );
+
+  server.registerTool(
+    "anytype_read_chat",
+    {
+      title: "Read chat",
+      description:
+        "Read messages of a chat (or of an object's discussion, by its chat_id), newest page first; messages are in ascending order. Continue with before = next_before, or poll new ones with after = next_after.",
+      inputSchema: z.object({ space_id: spaceId, chat_id: chatId, ...readMessagesSchema }),
+      annotations: READ_ONLY,
+    },
+    ({ space_id, chat_id, before, after, limit }) =>
+      run(async () => {
+        const res = await api.get<{ messages?: ChatMessage[] } & Json>(
+          `/v2/spaces/${seg(space_id)}/chats/${seg(chat_id)}/messages`,
+          { before, after, limit },
+        );
+        return ok(compactMessages(res.data));
+      }),
+  );
+
+  server.registerTool(
+    "anytype_send_chat_message",
+    {
+      title: "Send chat message",
+      description:
+        "Post a message to a chat as the connector's Anytype account; other members of the space will see it. Text is markdown, up to 8000 characters. attachments: object ids to attach.",
+      inputSchema: z.object({
+        space_id: spaceId,
+        chat_id: chatId,
+        text: z.string().min(1).max(8000),
+        reply_to: z.string().optional().describe("Message id to reply to"),
+        attachments: z.array(z.string()).max(32).optional(),
+      }),
+      annotations: ADDITIVE,
+    },
+    ({ space_id, chat_id, ...body }) =>
+      run(async () => ok((await api.post(`/v2/spaces/${seg(space_id)}/chats/${seg(chat_id)}/messages`, body)).data)),
   );
 }

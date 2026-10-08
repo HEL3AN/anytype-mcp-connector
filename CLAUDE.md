@@ -29,7 +29,8 @@ Claude ──HTTPS──▶ host nginx (TLS, certbot) ──▶ connector :3040�
 | `src/index.ts` | Entry point: loads `.env*`, `loadConfig()`, `createApp()`, listen, graceful shutdown |
 | `src/app.ts` | `createApp(config, {api?, cimdResolver?, log?})`: host validation, request log, `/`, icons, `/healthz`, `/readyz`, OAuth routes, `/mcp` |
 | `src/config.ts` | `loadConfig(env)` — pure, validated; `loadEnvFiles()` |
-| `src/tools.ts` | All MCP tools (Anytype API v2). Tool annotations are required for the directory |
+| `src/tools.ts` | All 23 MCP tools (Anytype API v2): search/fetch/edit, collections & queries, comments & chats, templates, members. Compact JSON output, `next_offset`, markdown paging. Tool annotations are required for the directory |
+| `src/hints.ts` | Turns Anytype errors/warnings (`issues[].hint` + `see_also` operationIds) into text with the next **tool** call |
 | `src/anytype/client.ts` | Thin fetch client for the Anytype JSON API v2 (ETag, error passthrough) |
 | `src/auth/oauth-server.ts` | Own OAuth 2.1 authorization server: CIMD (preferred) + DCR (compat), PKCE S256, RFC 9207 `iss`, RFC 8707 resource binding, rotating refresh tokens, bearer middleware, metadata |
 | `src/auth/cimd.ts` | Client ID Metadata Document resolver: https-only, no redirects, public-IP check, size/time limits, cache, trust policy `CIMD_TRUSTED_HOSTS` (default `claude.ai,claude.com`) |
@@ -96,6 +97,11 @@ scoped key for the test space `API_TEST` only — do writes there, never in the 
 - API v2 is pre-release but complete: `GET object?format=md` (read-only markdown), `outline=true`,
   ETag/`If-Match`, atomic `PATCH` ops (`replace_text`, `insert_blocks` *accepts markdown*, `set_properties`, …),
   `dry_run`. Op schemas: `GET /v2/schemas/ops/{op}`. Compact search filter grammar in `/v2/schemas/filters`.
+- Errors and warnings carry `issues[]` with `hint` (written as HTTP routes) and `see_also` refs
+  (`{op: operationId, params, query}`); `src/hints.ts` maps operationIds to our tools — add new tools there.
+- A discussion (comments) is a chat: `POST objects/{id}/discussion` is idempotent and returns the
+  `chat_id`; objects expose it as `discussion`. Collections vs queries: the wrong endpoint answers 400
+  with a `see_also` to the right one (`anytype_list_items` falls back automatically).
 - `DELETE` only works for objects created by a **named** API key; `is_archived` is output-only, so
   objects made by an unnamed key can only be removed in the app.
 - Legacy unscoped keys work but every response carries a deprecation notice; scoped keys are v2-only.

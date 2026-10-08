@@ -28,7 +28,8 @@ async function call(name: string, args: Record<string, unknown> = {}) {
   const res = await client.callTool({ name, arguments: args });
   const text = resultText(res);
   if (res.isError) throw new Error(`${name} failed: ${text.slice(0, 500)}`);
-  return JSON.parse(text);
+  // Warnings, if any, follow the JSON on later lines.
+  return JSON.parse(text.split("\n")[0]!);
 }
 
 async function callError(name: string, args: Record<string, unknown>) {
@@ -46,6 +47,7 @@ if (!space) {
 const space_id = space.id;
 const marker = `e2e-${Date.now().toString(36)}`;
 let object_id: string | undefined;
+const extraIds: string[] = [];
 console.log(`Anytype ${config.anytypeUrl}, space "${spaceName}" (${space_id.slice(-6)}), marker ${marker}`);
 
 try {
@@ -117,6 +119,49 @@ try {
     assert.match(text, /Anytype API 4\d\d/);
   });
 
+  await step("comments: add, reply, list", async () => {
+    const first = await call("anytype_add_comment", { space_id, object_id, text: `Comment **${marker}**` });
+    assert.ok(first.chat_id && first.id, "comment posted");
+    await call("anytype_add_comment", { space_id, object_id, text: "Reply", reply_to: first.id });
+    const md = await call("anytype_fetch", { space_id, object_id });
+    assert.equal(md.has_comments, true);
+    const list = await call("anytype_list_comments", { space_id, object_id });
+    assert.equal(list.messages.length, 2);
+    assert.match(list.messages[0].text, new RegExp(marker));
+    assert.equal(list.messages[1].reply_to, first.id);
+  });
+
+  await step("collections and queries: create, list items and views", async () => {
+    const col = await call("anytype_create_collection", { space_id, name: `[connector e2e] list ${marker}`, items: [object_id] });
+    extraIds.push(col.id);
+    const items = await call("anytype_list_items", { space_id, list_id: col.id });
+    assert.deepEqual(items.data.map((o: { id: string }) => o.id), [object_id]);
+    await call("anytype_list_views", { space_id, list_id: col.id });
+
+    const q = await call("anytype_create_query", { space_id, name: `[connector e2e] query ${marker}`, type: "page" });
+    extraIds.push(q.id);
+    const rows = await call("anytype_list_items", { space_id, list_id: q.id, limit: 100 });
+    assert.ok(Array.isArray(rows.data), "query rows (via the query endpoint fallback)");
+  });
+
+  await step("helpers: schema, templates, members, chats", async () => {
+    const grammar = await call("anytype_get_schema", { kind: "filters" });
+    assert.ok(grammar, "filter grammar");
+    await call("anytype_list_templates", { space_id, type: "page" });
+    const members = await call("anytype_list_members", { space_id });
+    assert.ok(members.data.length >= 1, "at least the owner");
+    await call("anytype_list_chats", { space_id });
+  });
+
+  await step("errors carry tool hints", async () => {
+    const text = await callError("anytype_edit_object", {
+      space_id,
+      object_id,
+      ops: [{ op: "replace_text", find: "text that is not there", replace: "x" }],
+    });
+    assert.match(text, /next: anytype_fetch/);
+  });
+
   await step("search finds the object", async () => {
     let found = false;
     for (let i = 0; i < 10 && !found; i++) {
@@ -127,9 +172,9 @@ try {
     assert.ok(found, "object appears in search results");
   });
 } finally {
-  if (object_id) {
-    await step("delete the object", async () => {
-      await call("anytype_delete_object", { space_id, object_id });
+  for (const id of [...extraIds, ...(object_id ? [object_id] : [])]) {
+    await step(`delete ${id.slice(-6)}`, async () => {
+      await call("anytype_delete_object", { space_id, object_id: id });
     });
   }
   await client.close();
