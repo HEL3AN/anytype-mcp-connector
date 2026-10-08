@@ -1,0 +1,37 @@
+name: Bug report
+description: Something doesn't work
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Security issue? Please don't file it here — see SECURITY.md."
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got. Include the tool call or Claude's message if relevant.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Connector version
+      description: "GET https://<your-domain>/healthz shows it"
+    validations:
+      required: true
+  - type: input
+    id: anytype
+    attributes:
+      label: anytype-cli version
+      placeholder: "ghcr.io/anyproto/anytype-cli:v0.4.0"
+  - type: dropdown
+    id: client
+    attributes:
+      label: Claude client
+      options: [claude.ai web, Claude desktop, Claude mobile, Claude Code, other]
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: "`docker compose logs --tail=100 connector anytype` — remove anything private."
+      render: text

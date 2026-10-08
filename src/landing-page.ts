@@ -42,6 +42,7 @@ export function renderLandingPage(view: {
   code { display:block; padding:10px 12px; border-radius:10px; background:var(--code); color:var(--text);
          font:14px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap:anywhere; }
   small { display:block; margin-top:16px; color:var(--muted); }
+  small a { color:inherit; }
 </style>
 </head>
 <body>
@@ -51,7 +52,7 @@ export function renderLandingPage(view: {
   <p>A self-hosted MCP connector that lets Claude search, read and edit this Anytype workspace.</p>
   <p>To connect, add a custom connector in Claude (Settings → Connectors) with this URL:</p>
   <code>${mcpUrl}</code>
-  <small>v${escapeHtml(view.version)}</small>
+  <small>v${escapeHtml(view.version)} · <a href="https://github.com/HEL3AN/anytype-mcp-connector">source</a> · <a href="https://github.com/HEL3AN/anytype-mcp-connector/blob/main/PRIVACY.md">privacy</a></small>
 </main>
 </body>
 </html>`;

@@ -3,8 +3,16 @@
 # Usage: see docs/deploy.md. Run from this directory: `docker compose up -d`.
 name: anytype-mcp
 
+# Bounded container logs (Docker's json-file driver does not rotate by default).
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   anytype:
+    logging: *logging
     image: ${ANYTYPE_CLI_IMAGE:-ghcr.io/anyproto/anytype-cli:v0.4.0}
     command: ["serve", "--listen-address", "0.0.0.0:31012"]
     restart: unless-stopped
@@ -23,6 +31,7 @@ services:
     networks: [backend]
 
   connector:
+    logging: *logging
     # Built from this checkout by default; set CONNECTOR_IMAGE=ghcr.io/... in .env to run a released
     # image instead (setup.sh/update.sh then pull it and never build).
     image: ${CONNECTOR_IMAGE:-anytype-mcp-connector:local}
@@ -54,6 +63,7 @@ services:
 
   # Optional TLS reverse proxy for servers that don't run one: set COMPOSE_PROFILES=caddy in .env.
   caddy:
+    logging: *logging
     profiles: [caddy]
     image: ${CADDY_IMAGE:-caddy:2.11-alpine}
     restart: unless-stopped

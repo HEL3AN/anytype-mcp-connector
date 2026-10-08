@@ -70,6 +70,11 @@ if $released; then
   echo "==> Restarting"
   compose up -d --no-build --remove-orphans
 else
+  docker buildx version >/dev/null 2>&1 || {
+    echo "Building the connector needs Docker Buildx (package docker-buildx-plugin or docker-buildx),"
+    echo "or set CONNECTOR_IMAGE=ghcr.io/hel3an/anytype-mcp-connector:latest in .env to use a release."
+    exit 1
+  }
   echo "==> Rebuilding and restarting"
   compose up -d --build --remove-orphans
 fi

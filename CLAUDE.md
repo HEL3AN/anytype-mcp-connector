@@ -1,8 +1,12 @@
 # CLAUDE.md — Anytype MCP connector
 
-Read this first. It is the hand-off document between sessions and machines: what the project is,
-how it is deployed, how to test, and the non-obvious things we learned the hard way.
+Guide for AI coding agents (and humans) working on this repository: what the project is, how it is
+built, tested and released, and the non-obvious things learned the hard way.
 Open work is tracked in **GitHub Issues** (`gh issue list`) and summarized in `ROADMAP.md`.
+
+**Maintainer sessions:** the maintainer's deployment notes (production server, workstation) live in a
+private repo. If you have access, read them too: `../anytype-mcp-ops/OPERATIONS.md`
+(`gh repo clone HEL3AN/anytype-mcp-ops ../anytype-mcp-ops`). Without access, ignore this.
 
 ## What this is
 
@@ -11,17 +15,17 @@ search, read and edit an **Anytype** workspace. Anytype is local-first and has n
 connector talks to a headless Anytype (`anytype-cli`) running next to it. Goal: a polished open-source
 connector, eventually listed in the Claude connectors directory.
 
-- Production: `https://anytype.example.com/mcp` (live since 2026-10-07, used daily by the owner).
-- Repo: `github.com/HEL3AN/anytype-mcp-connector` (private for now, branch `main`).
-- The owner talks Russian: **answer the user in Russian**; code, comments, commits and docs in English.
+- Repo: `github.com/HEL3AN/anytype-mcp-connector` (MIT), branch `main`; images on GHCR.
+- Code, comments, commits and docs are in English.
 
 ## Architecture
 
 ```
-Claude ──HTTPS──▶ host nginx (TLS, certbot) ──▶ connector :3040→3000 (OAuth + MCP)
-                                                     │  http://egress:31012 (JSON API v2)
-                                                     ▼
-                         anytype-cli (headless Anytype) in egress's netns ──▶ tun2socks ──▶ SOCKS (VLESS) ──▶ any-sync nodes
+Claude ──HTTPS──▶ reverse proxy (Caddy or host nginx, TLS) ──▶ connector :3000 (OAuth + MCP)
+                                                                  │  http://anytype:31012 (JSON API v2)
+                                                                  ▼
+                                         anytype-cli (headless Anytype) ──▶ any-sync network
+                                         (optional proxy overlay: tun2socks ──▶ SOCKS, for blocked networks)
 ```
 
 | Path | Role |
@@ -36,12 +40,13 @@ Claude ──HTTPS──▶ host nginx (TLS, certbot) ──▶ connector :3040�
 | `src/auth/cimd.ts` | Client ID Metadata Document resolver: https-only, no redirects, public-IP check, size/time limits, cache, trust policy `CIMD_TRUSTED_HOSTS` (default `claude.ai,claude.com`) |
 | `src/auth/store.ts`, `login-page.ts` | JSON-file OAuth state (DCR clients, refresh tokens, signing key) and consent/error pages |
 | `src/landing-page.ts`, `public/` | Home page + icons (favicon.ico, icon.svg, icon-128.png) |
-| `deploy/` | `docker-compose.yml`, `compose.proxy.yml` (blocked networks), `setup.sh`, `update.sh`, `backup.sh`, nginx template |
+| `deploy/` | `docker-compose.yml`, `compose.proxy.yml` (blocked networks), `compose.offline.yml` (backup checks), `setup.sh`, `update.sh`, `backup.sh`, `restore.sh`, nginx template |
 | `test/*.test.ts` | Unit/integration tests (`npm test`): tools vs a fake Anytype, OAuth flows, CIMD/SSRF, config, HTTP surface |
 | `scripts/e2e.ts` | `npm run e2e`: in-process connector vs the real local Anytype, full create/edit/delete cycle in `API_TEST` |
 | `scripts/smoke.ts`, `scripts/oauth-e2e.ts` | Checks against a running server (any URL, incl. production) |
 | `tools/derive-account-key/` | Go tool: 12-word Anytype login key → `anytype-cli` account key (run offline by the user) |
 | `docs/deploy.md` | Operator guide (setup, proxy overlay, updates, backups) |
+| `README.md`, `SECURITY.md`, `PRIVACY.md`, `CONTRIBUTING.md`, `CHANGELOG.md` | Public docs; keep the tool list in README in sync with `src/tools.ts` |
 
 Stack: Node 24 (Docker; local dev works on 22), TypeScript, Express 5, zod 4,
 **MCP SDK v2** (`@modelcontextprotocol/server` + `/node`, `createMcpHandler`) serving protocol
@@ -56,40 +61,19 @@ npm run typecheck && npm test && npm run build   # tests: node:test via tsx, her
 npm run e2e                      # every tool against the real local Anytype, writes only in space API_TEST
 AUTH_DISABLED=true PORT=3100 PUBLIC_URL=http://localhost:3100 npx tsx src/index.ts   # local, no OAuth
 MCP_URL=http://localhost:3100/mcp npm run smoke -- --write   # full tool cycle (needs a key that sees a space)
-OWNER_PASSWORD=... BASE_URL=https://anytype.example.com npm run oauth-e2e   # 34 OAuth checks (CIMD, DCR, iss, …), works against prod
+OWNER_PASSWORD=... BASE_URL=https://your.domain npm run oauth-e2e   # 34 OAuth checks (CIMD, DCR, iss, …) against a deployment
 ```
 
-Releasing: bump `version` in `package.json` (+ `npm install --package-lock-only`), commit, then
+Releasing: bump `version` in `package.json` (+ `npm install --package-lock-only`), add a `CHANGELOG.md`
+entry, commit, then
 `git tag vX.Y.Z && git push origin vX.Y.Z`. `.github/workflows/release.yml` checks the tag against
 `package.json`, pushes `ghcr.io/hel3an/anytype-mcp-connector:{X.Y.Z,X.Y,latest}` (amd64+arm64, SBOM,
-provenance), smoke-tests `/healthz` and creates a GitHub release. Production runs the released image
-(`CONNECTOR_IMAGE` in `deploy/.env`); `update.sh` pulls it.
+provenance), smoke-tests `/healthz` and creates a GitHub release. Deployments with
+`CONNECTOR_IMAGE=ghcr.io/...` in `deploy/.env` get it via `update.sh`.
 
-Local Anytype desktop API: `http://127.0.0.1:31009` (v2 since desktop 0.57.4). `.env.local` holds a
-scoped key for the test space `API_TEST` only — do writes there, never in the owner's real spaces.
-
-## Production (home server)
-
-- SSH: `<user>@<server> -p <ssh-port>`. The key is in the **Windows ssh-agent**: from this Windows PC use
-  `C:\Windows\System32\OpenSSH\ssh.exe` (Git Bash's `ssh` gets "Permission denied (publickey)").
-  `sudo` needs the owner's password — ask the owner to run sudo steps.
-- Checkout: `~/projects/anytype-mcp-connector` (read-only deploy key, SSH alias `<github-ssh-alias>`).
-- Deploy/update: `cd ~/projects/anytype-mcp-connector/deploy && ./update.sh` (git pull, pull the
-  released image — or rebuild when `CONNECTOR_IMAGE` is empty — `/readyz` check, automatic rollback).
-  Server code changes therefore reach production only through a release tag.
-- `deploy/.env` (mode 600, never print it): `DOMAIN`, `OWNER_PASSWORD`, `ANYTYPE_API_KEY`,
-  `COMPOSE_FILE=docker-compose.yml:compose.proxy.yml`, `COMPOSE_PROFILES=host-proxy`,
-  `HOST_PROXY_PORT=10808`, `GOOGLE_SITE_VERIFICATION`,
-  `CONNECTOR_IMAGE=ghcr.io/hel3an/anytype-mcp-connector:latest` (the GHCR package is public). Read a value without printing it, e.g.
-  `export OWNER_PASSWORD="$(ssh ... "grep ^OWNER_PASSWORD= .../deploy/.env | cut -d= -f2- | sed ...")"`.
-- Host nginx owns 80/443 (many other sites!). Our site: `/etc/nginx/sites-available/anytype.example.com`
-  → `127.0.0.1:3040`, certificate via certbot. Don't touch other sites.
-- Headless Anytype runs as the **owner's own account** (account key in the `anytype-config` volume —
-  treat the server and backups as sensitive). API key `claude-connector`, all spaces, read-write.
-- ufw rule (added by the owner): `allow in on br-anytype-mcp to 172.31.250.1 port 10818`.
-- Logs: `docker compose logs -f connector` (one line per request with JSON-RPC method/tool, no content);
-  nginx access log is readable (user is in `adm`). Anthropic egress: `160.79.104.0/21`, UA `Claude-User`
-  (MCP) and `python-httpx` (OAuth discovery/registration).
+Local development uses the Anytype desktop API (`http://127.0.0.1:31009`, v2 since desktop 0.57.4).
+Put a key **scoped to a throwaway space named `API_TEST`** in `.env.local` (`API_KEY=...`): `npm run e2e`
+writes there and refuses any other space. Never point tests at real spaces.
 
 ## Hard-won lessons (read before debugging)
 
@@ -108,9 +92,9 @@ scoped key for the test space `API_TEST` only — do writes there, never in the 
 - `anytype-cli` gives every gRPC call **5 s**: the first login of a real account times out → retry
   (`setup.sh` does). The CLI refuses mnemonics; the account key is `base64(MasterNode)` derived from the
   mnemonic (`tools/derive-account-key`).
-- From Russia the any-sync nodes are DPI-filtered (TCP connects, streams stall: `can't sync with peer` /
-  `no recent network activity`). Fixed with `deploy/compose.proxy.yml` (tun2socks + socat bridge to the
-  host's xray SOCKS). heart has **no proxy support**; prefer TCP: `ANYTYPE_PEFERYAMUXTRANSPORT=true`
+- Where any-sync nodes are DPI-filtered (seen in Russia: TCP connects, streams stall: `can't sync with
+  peer` / `no recent network activity`), use `deploy/compose.proxy.yml` (tun2socks + socat bridge to a
+  host SOCKS proxy). heart has **no proxy support**; prefer TCP: `ANYTYPE_PEFERYAMUXTRANSPORT=true`
   (sic — the heart field is misspelled).
 - Docker blocks containers from other bridges' gateway IPs; ufw blocks container→host except opened ports.
 - Anytype's data lives in the `anytype-config` volume (`/root/.config/anytype/data/<account>`), not
@@ -122,12 +106,12 @@ scoped key for the test space `API_TEST` only — do writes there, never in the 
   envelope). SDK v1 answered 400 → we moved to SDK v2. The v2 SDK has **no OAuth authorization server**.
 - DCR is **deprecated** in 2026-07-28 in favor of CIMD; authorization servers SHOULD send `iss` (RFC 9207).
   Claude uses CIMD only if AS metadata has `client_id_metadata_document_supported: true` **and** `none` in
-  `token_endpoint_auth_methods_supported`. CIMD client ids seen in production: claude.ai/desktop/mobile `https://claude.ai/oauth/mcp-oauth-client-metadata`
+  `token_endpoint_auth_methods_supported`. CIMD client ids seen in practice: claude.ai/desktop/mobile `https://claude.ai/oauth/mcp-oauth-client-metadata`
   (redirect `https://claude.ai/api/mcp/auth_callback`), Claude Code `https://claude.ai/oauth/claude-code-client-metadata`.
-- claude.ai answers Russian IPs with a 302 geo redirect: on the production server the connector must reach it
-  through the proxy overlay (it does — connector shares egress's netns).
-- Running prod `oauth-e2e` from the owner's PC shares the owner's IP; the consent limiter counts only failures,
-  but don't loop it.
+- claude.ai answers some regions (e.g. Russian IPs) with a 302 geo redirect, which breaks CIMD fetches:
+  there the connector must use the proxy overlay too (it shares egress's network namespace).
+- `oauth-e2e` against a deployment shares your IP with the owner's browser; the consent limiter counts only
+  failures, but don't loop it.
 - Claude caches discovery metadata ~5 min.
 - If a Claude surface can't connect after the CIMD switch, look for `CIMD client rejected: <url> — <reason>`
   in the connector log; a new metadata host may need adding to `CIMD_TRUSTED_HOSTS`.
@@ -136,23 +120,15 @@ scoped key for the test space `API_TEST` only — do writes there, never in the 
   index the site first (Search Console verified via `GOOGLE_SITE_VERIFICATION`).
 - Always check the latest versions/changelogs of SDKs, specs, actions and images before building on them.
 
-**This Windows workstation / tooling**
-- `TaskStop` on a background `npx tsx …` can leave the node child alive holding the port; kill by port:
-  `Get-NetTCPConnection -LocalPort 3000 -State Listen | % { Stop-Process -Id $_.OwningProcess -Force }`.
-- WSL2 **Ubuntu-24.04** with Docker + shellcheck is installed (vhdx on D:). Use it as root, from Git Bash:
-  `MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu-24.04 -u root -- bash -c '...'` (no sudo password needed).
-  Good for shellcheck, compose checks and restore drills (offline overlay!) without touching the server.
-  WSL stops when idle; containers with `restart: unless-stopped` come back on the next call.
-- Foreground `sleep`-chaining is blocked; use background commands / until-loops.
+**Tooling**
 - Repo enforces LF (`.gitattributes`); Python file writes must use `newline='\n'`.
 - CI runs shellcheck on `deploy/*.sh` — keep it clean.
 
 ## Conventions
 
-- Never print or commit secrets (`.env*`, keys, passwords, account key). The user once pasted keys in chat;
-  don't repeat them.
+- Never print or commit secrets (`.env*`, keys, passwords, account key or mnemonic).
 - Commit messages end with the `Co-Authored-By` line from the session's attribution instructions.
 - New behavior gets a test in `test/` (fake Anytype via `fakeAnytype()`, app via `createApp()` + `serve()`).
-- After changing server code: typecheck → `npm test` → `npm run e2e` → commit/push → wait for CI → release tag → wait for
-  the Release workflow → `update.sh` on the server → `oauth-e2e` against production.
+- After changing server code: typecheck → `npm test` → `npm run e2e` → commit/push → wait for CI → release
+  tag → wait for the Release workflow → `update.sh` on the deployment → `oauth-e2e` against it.
 - Keep `ROADMAP.md` checkboxes and GitHub issues in sync with reality.

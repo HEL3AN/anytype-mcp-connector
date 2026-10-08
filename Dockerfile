@@ -12,7 +12,8 @@ RUN npm run build && npm prune --omit=dev
 
 FROM node:24-alpine
 LABEL org.opencontainers.image.source="https://github.com/HEL3AN/anytype-mcp-connector" \
-      org.opencontainers.image.description="Remote MCP server that connects Claude to Anytype"
+      org.opencontainers.image.description="Remote MCP server that connects Claude to Anytype" \
+      org.opencontainers.image.licenses="MIT"
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3000 \

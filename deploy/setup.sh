@@ -146,6 +146,11 @@ if [[ "$image" == */* ]]; then
   docker pull "$image"
   compose up -d --no-build
 else
+  docker buildx version >/dev/null 2>&1 || {
+    echo "Building the connector needs Docker Buildx (package docker-buildx-plugin or docker-buildx),"
+    echo "or set CONNECTOR_IMAGE=ghcr.io/hel3an/anytype-mcp-connector:latest in .env to use a release."
+    exit 1
+  }
   echo "==> Building and starting the stack"
   compose up -d --build
 fi

@@ -1,0 +1,16 @@
+name: Feature request
+description: A tool, option or improvement you'd like
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What do you want Claude to be able to do?
+      description: Describe the task in your own words; an example prompt helps.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Ideas
+      description: Anytype API endpoints, tool shape, alternatives you considered.

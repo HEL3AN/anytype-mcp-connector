@@ -1,7 +1,7 @@
 {
   "name": "anytype-mcp-connector",
   "version": "0.3.0",
-  "description": "Remote MCP connector for Anytype (Claude)",
+  "description": "Self-hosted remote MCP connector that lets Claude search, read and edit your Anytype workspace",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
@@ -30,5 +30,22 @@
   "private": true,
   "engines": {
     "node": ">=22"
-  }
+  },
+  "license": "MIT",
+  "author": "HEL3AN",
+  "homepage": "https://github.com/HEL3AN/anytype-mcp-connector#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HEL3AN/anytype-mcp-connector.git"
+  },
+  "bugs": {
+    "url": "https://github.com/HEL3AN/anytype-mcp-connector/issues"
+  },
+  "keywords": [
+    "mcp",
+    "anytype",
+    "claude",
+    "model-context-protocol",
+    "oauth"
+  ]
 }

@@ -4,7 +4,7 @@ Goal: a self-hosted remote MCP connector that lets Claude (web, desktop, mobile,
 an Anytype workspace — easy to deploy, safe to expose, painless to update, good enough to publish as
 open source and submit to the Claude connectors directory.
 
-Production: `https://anytype.example.com/mcp`. Details, commands and lessons learned: `CLAUDE.md`.
+Architecture, commands and lessons learned: `CLAUDE.md`.
 Each open item links to a GitHub issue with context and a definition of done.
 
 ## Done
@@ -17,7 +17,7 @@ Each open item links to a GitHub issue with context and a definition of done.
 - Docker stack (anytype-cli + connector, optional Caddy), `setup.sh` / `update.sh` (readiness check +
   rollback) / `backup.sh`, nginx template, docs
 - Proxy overlay for networks where Anytype sync is blocked (tun2socks + host SOCKS bridge)
-- Production rollout on the home server; OAuth e2e passes against production; claude.ai connected
+- First production deployment (maintainer's server); OAuth e2e passes against it; claude.ai connected
 - CI: typecheck, build, Docker image, compose validation, shellcheck
 - Home page, icons, `robots.txt`, Search Console verification hook
 - Version audit (Oct 2026): Node 24, current actions/images, SDK v2

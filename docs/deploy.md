@@ -5,7 +5,7 @@ The stack runs three containers with Docker Compose:
 | Service     | Image                              | Role                                                     |
 |-------------|------------------------------------|----------------------------------------------------------|
 | `anytype`   | `ghcr.io/anyproto/anytype-cli`     | Headless Anytype: syncs your spaces, serves the JSON API |
-| `connector` | built from this repository, or `ghcr.io/hel3an/anytype-mcp-connector` | MCP server + OAuth for Claude |
+| `connector` | `ghcr.io/hel3an/anytype-mcp-connector` (or built from this checkout) | MCP server + OAuth for Claude |
 | `caddy`     | `caddy`                            | HTTPS with automatic Let's Encrypt certificates          |
 
 The Anytype API is reachable only from the connector. The connector is published on
@@ -19,7 +19,9 @@ detects the busy ports, disables Caddy and generates an nginx site in `deploy/ng
 ## Requirements
 
 - Linux VPS (amd64 or arm64), 1 vCPU, **1 GB RAM minimum** (2 GB recommended for large spaces)
-- Docker Engine with the Compose plugin
+- Docker Engine with the Compose plugin ([official install](https://docs.docker.com/engine/install/);
+  with Ubuntu's own `docker.io` package also install `docker-compose-v2`, and `docker-buildx` if you
+  build the connector yourself)
 - A domain name with an `A` (and optionally `AAAA`) record pointing to the VPS
 - Ports 80 and 443 open
 
@@ -103,7 +105,7 @@ Anytype image changes, it first takes a backup (`backup.sh`): a newer Anytype ma
 cannot simply be rolled back, so if it misbehaves, pin the old `ANYTYPE_CLI_IMAGE` again and run
 `./restore.sh` with that archive. `--backup` forces a backup, `--no-backup` skips it.
 
-**Released images (recommended).** Every release publishes a multi-arch image (linux/amd64, linux/arm64)
+**Released images (default).** Every release publishes a multi-arch image (linux/amd64, linux/arm64)
 to GHCR, so the server does not need to build anything. In `deploy/.env`:
 
 ```bash
@@ -116,8 +118,6 @@ CONNECTOR_IMAGE=ghcr.io/hel3an/anytype-mcp-connector:latest   # newest release
 release, pin its exact tag and run `./update.sh` again. Leave `CONNECTOR_IMAGE` empty to build from
 your checkout (for local changes or forks).
 
-While the GHCR package is private, log the server in once with a token that has `read:packages`:
-`docker login ghcr.io -u <github-user>` (paste the token as the password).
 
 To update headless Anytype or Caddy, change `ANYTYPE_CLI_IMAGE` / `CADDY_IMAGE` in `deploy/.env` and
 run `./update.sh`. Pin exact versions: an Anytype API key created by a newer anytype-cli does not work
@@ -185,6 +185,15 @@ docker compose exec anytype anytype auth apikey list
 
 - `GET /healthz` — the connector process is up (returns its version)
 - `GET /readyz` — Anytype is reachable and the API key works
+
+### Connector icon in Claude
+
+Claude shows custom connector icons from Google's favicon service, not from the server. The connector
+serves a home page with the Anytype icon and a `robots.txt` that lets crawlers index it; once Google
+has indexed your domain, the icon appears. To speed this up, verify the domain in
+[Google Search Console](https://search.google.com/search-console) with the "HTML tag" method: put the
+token in `GOOGLE_SITE_VERIFICATION` in `deploy/.env`, run `docker compose up -d connector`, click
+Verify, then request indexing of the home page.
 
 ### Changing the owner password
 
