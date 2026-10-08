@@ -26,7 +26,9 @@ Claude ──HTTPS──▶ host nginx (TLS, certbot) ──▶ connector :3040�
 
 | Path | Role |
 |---|---|
-| `src/index.ts` | Express app: host validation, request log, `/`, icons, `/healthz`, `/readyz`, OAuth routes, `/mcp` |
+| `src/index.ts` | Entry point: loads `.env*`, `loadConfig()`, `createApp()`, listen, graceful shutdown |
+| `src/app.ts` | `createApp(config, {api?, cimdResolver?, log?})`: host validation, request log, `/`, icons, `/healthz`, `/readyz`, OAuth routes, `/mcp` |
+| `src/config.ts` | `loadConfig(env)` — pure, validated; `loadEnvFiles()` |
 | `src/tools.ts` | All MCP tools (Anytype API v2). Tool annotations are required for the directory |
 | `src/anytype/client.ts` | Thin fetch client for the Anytype JSON API v2 (ETag, error passthrough) |
 | `src/auth/oauth-server.ts` | Own OAuth 2.1 authorization server: CIMD (preferred) + DCR (compat), PKCE S256, RFC 9207 `iss`, RFC 8707 resource binding, rotating refresh tokens, bearer middleware, metadata |
@@ -34,7 +36,9 @@ Claude ──HTTPS──▶ host nginx (TLS, certbot) ──▶ connector :3040�
 | `src/auth/store.ts`, `login-page.ts` | JSON-file OAuth state (DCR clients, refresh tokens, signing key) and consent/error pages |
 | `src/landing-page.ts`, `public/` | Home page + icons (favicon.ico, icon.svg, icon-128.png) |
 | `deploy/` | `docker-compose.yml`, `compose.proxy.yml` (blocked networks), `setup.sh`, `update.sh`, `backup.sh`, nginx template |
-| `scripts/smoke.ts`, `scripts/oauth-e2e.ts` | End-to-end checks against a running server |
+| `test/*.test.ts` | Unit/integration tests (`npm test`): tools vs a fake Anytype, OAuth flows, CIMD/SSRF, config, HTTP surface |
+| `scripts/e2e.ts` | `npm run e2e`: in-process connector vs the real local Anytype, full create/edit/delete cycle in `API_TEST` |
+| `scripts/smoke.ts`, `scripts/oauth-e2e.ts` | Checks against a running server (any URL, incl. production) |
 | `tools/derive-account-key/` | Go tool: 12-word Anytype login key → `anytype-cli` account key (run offline by the user) |
 | `docs/deploy.md` | Operator guide (setup, proxy overlay, updates, backups) |
 
@@ -47,7 +51,8 @@ OAuth server is our own code (`src/auth`). Scripts use `@modelcontextprotocol/cl
 
 ```bash
 npm run dev                      # tsx watch; reads .env.local (API_KEY, OWNER_PASSWORD, ...)
-npm run typecheck && npm run build
+npm run typecheck && npm test && npm run build   # tests: node:test via tsx, hermetic (fake Anytype, fake CIMD)
+npm run e2e                      # every tool against the real local Anytype, writes only in space API_TEST
 AUTH_DISABLED=true PORT=3100 PUBLIC_URL=http://localhost:3100 npx tsx src/index.ts   # local, no OAuth
 MCP_URL=http://localhost:3100/mcp npm run smoke -- --write   # full tool cycle (needs a key that sees a space)
 OWNER_PASSWORD=... BASE_URL=https://anytype.example.com npm run oauth-e2e   # 34 OAuth checks (CIMD, DCR, iss, …), works against prod
@@ -61,7 +66,6 @@ provenance), smoke-tests `/healthz` and creates a GitHub release. Production run
 
 Local Anytype desktop API: `http://127.0.0.1:31009` (v2 since desktop 0.57.4). `.env.local` holds a
 scoped key for the test space `API_TEST` only — do writes there, never in the owner's real spaces.
-(The old key was deleted; ask the owner for a new one when needed, #9.)
 
 ## Production (home server)
 
@@ -142,6 +146,7 @@ scoped key for the test space `API_TEST` only — do writes there, never in the 
 - Never print or commit secrets (`.env*`, keys, passwords, account key). The user once pasted keys in chat;
   don't repeat them.
 - Commit messages end with the `Co-Authored-By` line from the session's attribution instructions.
-- After changing server code: typecheck → local check → commit/push → wait for CI → release tag → wait for
+- New behavior gets a test in `test/` (fake Anytype via `fakeAnytype()`, app via `createApp()` + `serve()`).
+- After changing server code: typecheck → `npm test` → `npm run e2e` → commit/push → wait for CI → release tag → wait for
   the Release workflow → `update.sh` on the server → `oauth-e2e` against production.
 - Keep `ROADMAP.md` checkboxes and GitHub issues in sync with reality.

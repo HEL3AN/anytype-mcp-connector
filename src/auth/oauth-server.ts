@@ -23,6 +23,8 @@ export interface OAuthServerOptions {
   allowedRedirectUris: string[];
   /** Hosts allowed to serve client metadata documents ("*" = any public host). */
   cimdTrustedHosts: string[];
+  /** Overrides the metadata document resolver (tests). */
+  cimdResolver?: CimdResolver;
   maxClients?: number;
 }
 
@@ -123,7 +125,7 @@ export class OAuthServer {
 
   constructor(private readonly opts: OAuthServerOptions) {
     this.store = new AuthStore(opts.dataDir);
-    this.cimd = new CimdResolver(opts.cimdTrustedHosts);
+    this.cimd = opts.cimdResolver ?? new CimdResolver(opts.cimdTrustedHosts);
     this.passwordHash = createHash("sha256").update(opts.ownerPassword).digest();
     this.issuer = opts.issuer.href;
   }

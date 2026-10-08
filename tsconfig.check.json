@@ -1,0 +1,9 @@
+{
+  // Type-checks everything that is not built: tests and scripts (npm run typecheck).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["src", "scripts", "test"]
+}

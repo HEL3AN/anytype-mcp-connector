@@ -26,15 +26,15 @@ Each open item links to a GitHub issue with context and a definition of done.
   `:latest` via `update.sh` (v0.2.0) — #2
 - Backups verified: production backup restored offline in a scratch Docker (173/173 objects, same
   OAuth signing key); `restore.sh`, `.env` in the archive, private archives, retention — #3
+- Tests: 82 hermetic tests in CI (tools vs fake Anytype, OAuth/CIMD/SSRF, config, HTTP surface) and
+  `npm run e2e` against the real Anytype test space — #4
 
 ## Next (in order)
 
-1. **Tests** — unit (mocked API) + e2e on the test space, in CI — #4
-2. **Tool UX** — compact outputs, error hints, collections, comments/chats, `ttlMs` — #5
-3. **Open source** — README, LICENSE, SECURITY, privacy policy, strip private notes — #7
-4. **Directory** — Anyproto permission, submission materials — #8
+1. **Tool UX** — compact outputs, error hints, collections, comments/chats, `ttlMs` — #5
+2. **Open source** — README, LICENSE, SECURITY, privacy policy, strip private notes — #7
+3. **Directory** — Anyproto permission, submission materials — #8
 
 ## Known issues
 
 - Connector icon depends on Google indexing the domain — #6
-- Local desktop key `API_TEST` was deleted by the owner; a new one will be issued for #4 — #9
