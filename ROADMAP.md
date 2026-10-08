@@ -24,14 +24,15 @@ Each open item links to a GitHub issue with context and a definition of done.
 - Own OAuth server for MCP 2026-07-28: CIMD (claude.ai uses it), RFC 9207 `iss`, SDK v1 removed — #1
 - Release pipeline: tag → multi-arch image on GHCR (public) → GitHub release; production pulls
   `:latest` via `update.sh` (v0.2.0) — #2
+- Backups verified: production backup restored offline in a scratch Docker (173/173 objects, same
+  OAuth signing key); `restore.sh`, `.env` in the archive, private archives, retention — #3
 
 ## Next (in order)
 
-1. **Restore drill** — verify backups actually restore — #3
-2. **Tests** — unit (mocked API) + e2e on the test space, in CI — #4
-3. **Tool UX** — compact outputs, error hints, collections, comments/chats, `ttlMs` — #5
-4. **Open source** — README, LICENSE, SECURITY, privacy policy, strip private notes — #7
-5. **Directory** — Anyproto permission, submission materials — #8
+1. **Tests** — unit (mocked API) + e2e on the test space, in CI — #4
+2. **Tool UX** — compact outputs, error hints, collections, comments/chats, `ttlMs` — #5
+3. **Open source** — README, LICENSE, SECURITY, privacy policy, strip private notes — #7
+4. **Directory** — Anyproto permission, submission materials — #8
 
 ## Known issues
 

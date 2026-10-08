@@ -103,6 +103,9 @@ scoped key for the test space `API_TEST` only — do writes there, never in the 
   host's xray SOCKS). heart has **no proxy support**; prefer TCP: `ANYTYPE_PEFERYAMUXTRANSPORT=true`
   (sic — the heart field is misspelled).
 - Docker blocks containers from other bridges' gateway IPs; ufw blocks container→host except opened ports.
+- Anytype's data lives in the `anytype-config` volume (`/root/.config/anytype/data/<account>`), not
+  `anytype-data`. A restored copy is the same device: never let it sync alongside the server
+  (`deploy/compose.offline.yml`). `backup.sh` stops Anytype for ~10 s; `/readyz` is 503 meanwhile.
 
 **MCP / Claude**
 - Claude speaks MCP **2026-07-28** and probes `server/discover` first (needs `Mcp-Method` header + `_meta`
@@ -126,6 +129,10 @@ scoped key for the test space `API_TEST` only — do writes there, never in the 
 **This Windows workstation / tooling**
 - `TaskStop` on a background `npx tsx …` can leave the node child alive holding the port; kill by port:
   `Get-NetTCPConnection -LocalPort 3000 -State Listen | % { Stop-Process -Id $_.OwningProcess -Force }`.
+- WSL2 **Ubuntu-24.04** with Docker + shellcheck is installed (vhdx on D:). Use it as root, from Git Bash:
+  `MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu-24.04 -u root -- bash -c '...'` (no sudo password needed).
+  Good for shellcheck, compose checks and restore drills (offline overlay!) without touching the server.
+  WSL stops when idle; containers with `restart: unless-stopped` come back on the next call.
 - Foreground `sleep`-chaining is blocked; use background commands / until-loops.
 - Repo enforces LF (`.gitattributes`); Python file writes must use `newline='\n'`.
 - CI runs shellcheck on `deploy/*.sh` — keep it clean.
