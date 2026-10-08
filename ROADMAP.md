@@ -40,4 +40,4 @@ Each open item links to a GitHub issue with context and a definition of done.
 
 ## Known issues
 
-- Connector icon depends on Google indexing the domain — #6
+- Connector icons come from Google's favicon index (see docs/deploy.md, "Connector icon in Claude")
