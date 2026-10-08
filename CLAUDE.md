@@ -86,9 +86,8 @@ writes there and refuses any other space. Never point tests at real spaces.
   `chat_id`; objects expose it as `discussion`. Collections vs queries: the wrong endpoint answers 400
   with a `see_also` to the right one (`anytype_list_items` falls back automatically).
 - Full-text search lags object creation by a few seconds (indexing is async): poll, don't assume.
-- The API answers a trailing-slash path with **301** to the canonical route, and axios/follow-redirects
-  replay DELETE/PATCH with the body on 301. Combined with URL dot-segment normalization this is why
-  `seg()` refuses `.`/`..` ids.
+- Ids are untrusted input from the model: URL parsers resolve `.`/`..` as dot segments, so `seg()`
+  refuses them (an object call must never reach another route).
 - anytype-cli v0.4.0 (heart v0.51.3) is current as of 2026-10; heart 0.51.4/0.51.5 (chat status,
   markdown in v2 chat text, reconnect after sleep) arrive with the next CLI release — re-run e2e then.
 - `DELETE` only works for objects created by a **named** API key; `is_archived` is output-only, so
