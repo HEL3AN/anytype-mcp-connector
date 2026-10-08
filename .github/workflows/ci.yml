@@ -44,3 +44,24 @@ jobs:
         run: shellcheck deploy/*.sh
       - name: Check workflows
         run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color
+
+  derive-account-key:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/derive-account-key
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: tools/derive-account-key/go.mod
+          cache-dependency-path: tools/derive-account-key/go.sum
+      - run: go vet ./...
+      - run: go build ./...
+      - name: Known-answer test (public BIP39 test phrase, not a real account)
+        run: |
+          out=$(echo "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about" | go run .)
+          echo "$out" | sha256sum | grep -q "^$EXPECTED " || { echo "derivation output changed"; exit 1; }
+        env:
+          EXPECTED: c8c730ee50d06b7fac440aa6076ee444396b67b67f27f5f683e0d4a6bf5ea5fe
+      - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

@@ -19,6 +19,12 @@ updates:
     ignore:
       - dependency-name: node
         update-types: ["version-update:semver-major"]
+  - package-ecosystem: gomod
+    directory: /tools/derive-account-key
+    schedule: { interval: weekly }
+    groups:
+      go:
+        patterns: ["*"]
   - package-ecosystem: docker-compose
     directory: /deploy
     schedule: { interval: weekly }

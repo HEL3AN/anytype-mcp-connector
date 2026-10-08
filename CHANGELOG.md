@@ -7,6 +7,8 @@ are published as `ghcr.io/hel3an/anytype-mcp-connector:<version>`.
 
 - Open-source release: README, MIT license, security and privacy policies, contributing guide.
 - Container logs are rotated (3 × 10 MB per service).
+- `tools/derive-account-key`: dependencies updated (any-sync 0.13.7, x/crypto 0.57; btcd no longer
+  needed), checked in CI with a known-answer test and govulncheck.
 
 ## 0.3.0 — 2026-10-08
 
