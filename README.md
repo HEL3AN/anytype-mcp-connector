@@ -13,6 +13,7 @@
   <a href="https://github.com/HEL3AN/anytype-mcp-connector/actions/workflows/ci.yml"><img src="https://github.com/HEL3AN/anytype-mcp-connector/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/HEL3AN/anytype-mcp-connector/releases"><img src="https://img.shields.io/github/v/release/HEL3AN/anytype-mcp-connector" alt="Release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/HEL3AN/anytype-mcp-connector"><img src="https://api.scorecard.dev/projects/github.com/HEL3AN/anytype-mcp-connector/badge" alt="OpenSSF Scorecard"></a>
 </p>
 
 ---
@@ -68,9 +69,10 @@ cd anytype-mcp/deploy
 ```
 
 `setup.sh` asks for the domain and an owner password, signs Anytype in, creates a scoped API key and
-starts everything (with automatic HTTPS, or an nginx config if you already run a proxy). Then in Claude:
-**Settings → Connectors → Add custom connector** → `https://<your-domain>/mcp`, and approve on the
-consent page with the owner password. The connector then shows up in the Claude mobile apps as well.
+starts everything (with automatic HTTPS, or an nginx config if you already run a proxy). Then open
+`https://<your-domain>/` and click **Add to Claude** (or in Claude: **Settings → Connectors → Add custom
+connector** → `https://<your-domain>/mcp`), and approve on the consent page with the owner password.
+The connector then shows up in the Claude mobile apps as well.
 
 Full guide — reverse proxies, blocked networks, updates, backups: [docs/deploy.md](docs/deploy.md).
 
@@ -91,12 +93,18 @@ cd anytype-mcp/deploy && ./update.sh
 Pulls the latest release image (or rebuilds from your checkout), checks readiness and rolls back
 automatically if the new version doesn't start. Before Anytype itself is updated, it takes a backup.
 
+Release images are built by GitHub Actions with a signed provenance attestation. To check one:
+`gh attestation verify oci://ghcr.io/hel3an/anytype-mcp-connector:<version> --owner HEL3AN`.
+For maximum control, pin `CONNECTOR_IMAGE` to a version you verified instead of `:latest`.
+
 ## Security & privacy
 
 - OAuth 2.1 with PKCE, Client ID Metadata Documents (how Claude identifies itself), resource-bound
   tokens and rotating refresh tokens; every new connection is approved on a consent page with the
   owner password.
 - The connector stores no note content and logs no content; see [PRIVACY.md](PRIVACY.md).
+- Claude is told that note bodies, comments and chat messages are data, not instructions; posting to
+  chats and comments is marked as reaching other people, and deleting always asks in Claude Code.
 - Threat model and how to report a vulnerability: [SECURITY.md](SECURITY.md).
 
 ## Limitations

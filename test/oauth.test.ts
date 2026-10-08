@@ -375,3 +375,26 @@ describe("bearer middleware", () => {
     assert.equal(auth.clientId, CLAUDE_ID);
   });
 });
+
+describe("revocation and robustness", () => {
+  test("revoking a refresh token invalidates its access tokens immediately", async () => {
+    const tokens = await login();
+    assert.equal((await mcp(tokens.access_token)).status, 200);
+    await fetch(`${srv.url}/revoke`, { method: "POST", body: new URLSearchParams({ client_id: CLAUDE_ID, token: tokens.refresh_token! }) });
+    assert.equal((await mcp(tokens.access_token)).status, 401);
+  });
+
+  test("a replayed refresh token also kills the family's access tokens", async () => {
+    const first = await login();
+    const second = await token({ grant_type: "refresh_token", client_id: CLAUDE_ID, refresh_token: first.refresh_token! });
+    assert.equal((await mcp(second.body.access_token)).status, 200);
+    await token({ grant_type: "refresh_token", client_id: CLAUDE_ID, refresh_token: first.refresh_token! });
+    assert.equal((await mcp(second.body.access_token)).status, 401);
+  });
+
+  test("malformed Basic credentials are a 401, not a server error", async () => {
+    const res = await token({ grant_type: "refresh_token", refresh_token: "x" }, { Authorization: `Basic ${Buffer.from("%E0%A4%A:x").toString("base64")}` });
+    assert.equal(res.status, 401);
+    assert.equal(res.body.error, "invalid_client");
+  });
+});

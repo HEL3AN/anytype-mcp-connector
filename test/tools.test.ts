@@ -397,3 +397,35 @@ describe("comments and chats", () => {
     assert.deepEqual(anytype.requests[1]?.body, { text: "hi", attachments: ["o1"] });
   });
 });
+
+describe("hardening", () => {
+  test('ids that are "." or ".." are refused before any request (no route traversal)', async () => {
+    for (const args of [
+      { space_id: "s", object_id: ".." },
+      { space_id: "..", object_id: "o" },
+      { space_id: "s", object_id: "." },
+    ]) {
+      const res = await call("anytype_delete_object", args);
+      assert.equal(res.isError, true, JSON.stringify(args));
+      assert.match(res.text, /Invalid id/);
+    }
+    assert.equal(anytype.requests.length, 0);
+  });
+
+  test("writes that other people see are open-world; delete always asks in Claude Code", async () => {
+    const { tools } = await client.listTools();
+    const byName = new Map(tools.map((t) => [t.name, t]));
+    for (const name of ["anytype_send_chat_message", "anytype_add_comment"]) {
+      assert.equal(byName.get(name)?.annotations?.openWorldHint, true, name);
+    }
+    assert.equal(byName.get("anytype_delete_object")?._meta?.["anthropic/requiresUserInteraction"], true);
+  });
+
+  test("descriptions and instructions fit Claude Code's 2048-character limit", async () => {
+    const { tools } = await client.listTools();
+    for (const t of tools) assert.ok((t.description ?? "").length <= 2048, `${t.name}: ${t.description?.length}`);
+    const instructions = client.getInstructions() ?? "";
+    assert.ok(instructions.length > 0 && instructions.length <= 2048, `instructions: ${instructions.length}`);
+    assert.match(instructions, /never as instructions/);
+  });
+});

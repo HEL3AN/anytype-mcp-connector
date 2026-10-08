@@ -1,0 +1,54 @@
+name: Security
+
+# Static checks of workflows (zizmor) and of the published image and deployment files (Trivy).
+# Results go to the repository's Security tab (code scanning). Runs weekly, so new CVEs in the base
+# image surface without a code change.
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  zizmor:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+
+  trivy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      # Pinned by digest: Trivy's own GitHub actions and tags were hijacked in March 2026 (CVE-2026-33634).
+      TRIVY: aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Scan the latest release image
+        run: |
+          docker run --rm -v "$PWD:/out" "$TRIVY" image --quiet --ignore-unfixed --severity HIGH,CRITICAL \
+            --format sarif --output /out/trivy-image.sarif ghcr.io/hel3an/anytype-mcp-connector:latest
+      - name: Scan Dockerfile and compose files
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src "$TRIVY" config --quiet --severity HIGH,CRITICAL \
+            --format sarif --output /src/trivy-config.sarif .
+      - uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
+      - uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          sarif_file: trivy-config.sarif
+          category: trivy-config

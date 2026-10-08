@@ -5,6 +5,7 @@
 # - starts the whole stack (pulls the released connector image if CONNECTOR_IMAGE names a registry
 #   image, otherwise builds it from this checkout), then checks readiness
 set -euo pipefail
+umask 077 # .env and temporary files hold secrets
 cd "$(dirname "$0")"
 
 compose() { docker compose "$@"; }
@@ -34,6 +35,10 @@ fi
 domain=$(env_value DOMAIN)
 if [ -z "$domain" ] || [ "$domain" = "anytype.example.com" ]; then
   read -rp "Public domain for the connector (e.g. anytype.example.com): " domain
+  domain=$(printf '%s' "$domain" | tr '[:upper:]' '[:lower:]')
+  [[ "$domain" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] || {
+    echo "Not a valid domain name: $domain"; exit 1;
+  }
   set_env DOMAIN "$domain"
 fi
 
@@ -103,9 +108,10 @@ any space list | strip_ansi || true
 
 # key_works KEY — true if the Anytype JSON API accepts the key
 key_works() {
-  # $K must expand inside the container, not here (keeps the key out of the host command line).
+  # The key travels in the environment (`-e K` names the variable only) and $K expands inside the
+  # container, so it never appears on a command line (ps, /proc/*/cmdline).
   # shellcheck disable=SC2016
-  compose exec -T -e K="$1" anytype sh -c \
+  K="$1" compose exec -T -e K anytype sh -c \
     'wget -q -O /dev/null --header "Authorization: Bearer $K" http://127.0.0.1:31012/v2/auth/whoami' 2>/dev/null
 }
 

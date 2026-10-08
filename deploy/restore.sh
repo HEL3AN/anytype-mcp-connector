@@ -8,6 +8,7 @@
 # copy): they share one device identity. To check a backup elsewhere, keep that copy offline:
 #   COMPOSE_FILE=docker-compose.yml:compose.offline.yml ./restore.sh <archive>
 set -euo pipefail
+umask 077 # the restored .env holds secrets
 cd "$(dirname "$0")"
 
 compose() { docker compose "$@"; }
@@ -16,6 +17,7 @@ archive=${1:?usage: ./restore.sh <archive.tar.gz> [--yes]}
 [ -f "$archive" ] || { echo "No such file: $archive"; exit 1; }
 archive_dir=$(cd "$(dirname "$archive")" && pwd)
 archive_name=$(basename "$archive")
+[[ "$archive_name" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "Archive name may only contain letters, digits, dots and dashes"; exit 1; }
 
 if [ ! -f .env ]; then
   if tar tzf "$archive" config/.env >/dev/null 2>&1; then

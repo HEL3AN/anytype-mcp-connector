@@ -79,6 +79,8 @@ class OAuthError extends Error {
 }
 
 const PENDING_TTL_MS = 10 * 60 * 1000;
+/** Most authorization requests waiting for consent at once; the oldest are dropped beyond it. */
+const MAX_PENDING = 1000;
 const CODE_TTL_MS = 60 * 1000;
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
@@ -195,7 +197,8 @@ export class OAuthServer {
 
     const urlencoded = express.urlencoded({ extended: false, limit: "64kb" });
     router.all("/authorize", limiter(15, 100), urlencoded, (req, res) => void this.authorize(req, res));
-    // Brute-force guard: only failed attempts (wrong password, expired request) count.
+    // Brute-force guard: only failed attempts (wrong password, expired request) count, per IP and
+    // across all IPs (an attacker with many addresses still gets few guesses).
     const consentLimiter = rateLimit({
       windowMs: 15 * 60_000,
       limit: 10,
@@ -203,7 +206,15 @@ export class OAuthServer {
       standardHeaders: true,
       legacyHeaders: false,
     });
-    router.post("/oauth/consent", consentLimiter, urlencoded, (req, res) => this.consent(req, res));
+    const globalConsentLimiter = rateLimit({
+      windowMs: 60 * 60_000,
+      limit: 30,
+      skipSuccessfulRequests: true,
+      keyGenerator: () => "all",
+      standardHeaders: true,
+      legacyHeaders: false,
+    });
+    router.post("/oauth/consent", consentLimiter, globalConsentLimiter, urlencoded, (req, res) => this.consent(req, res));
     router.options(["/token", "/register", "/revoke"], publicCors);
     router.post("/token", publicCors, limiter(1, 60), urlencoded, (req, res) => void this.token(req, res));
     router.post("/register", publicCors, limiter(60, 20), express.json({ limit: "64kb" }), (req, res) =>
@@ -246,8 +257,10 @@ export class OAuthServer {
       scp: string[];
       aud: string;
       exp: number;
+      fam?: string;
     };
     if (payload.exp < nowSec()) throw new Error("Access token expired");
+    if (payload.fam && this.store.isFamilyRevoked(payload.fam)) throw new Error("Access token was revoked");
     if (normResource(payload.aud) !== normResource(this.opts.resource.href)) throw new Error("Token was not issued for this resource");
     if (!isCimdClientId(payload.cid) && !this.store.getClient(payload.cid)) throw new Error("Client no longer registered");
     return { token, clientId: payload.cid, scopes: payload.scp, expiresAt: payload.exp, resource: new URL(payload.aud) };
@@ -289,6 +302,10 @@ export class OAuthServer {
     const scopes = requested.filter((s) => this.opts.scopes.includes(s));
 
     this.sweep();
+    for (const id of this.pending.keys()) {
+      if (this.pending.size < MAX_PENDING) break;
+      this.pending.delete(id); // oldest first (insertion order)
+    }
     const requestId = randomUUID();
     this.pending.set(requestId, {
       client,
@@ -316,6 +333,7 @@ export class OAuthServer {
       return;
     }
     if (!this.checkPassword(password ?? "")) {
+      console.warn("Consent: wrong owner password");
       sendHtml(res.status(401), renderLoginPage({ ...this.consentView(request_id!, pending.client, pending.redirectUri), error: "Wrong password" }));
       return;
     }
@@ -387,7 +405,7 @@ export class OAuthServer {
         const reason = err instanceof CimdError ? err.message : "metadata unavailable";
         // Logged for operators: the client_id URL is public, and this is the first thing to check
         // when a new client (or a Claude surface with a new metadata host) can't connect.
-        console.warn(`CIMD client rejected: ${clientId} — ${reason}`);
+        console.warn(`CIMD client rejected: ${JSON.stringify(clientId.slice(0, 300))} — ${reason}`);
         throw new OAuthError("invalid_client", `Client metadata rejected: ${reason}`);
       }
     }
@@ -414,8 +432,12 @@ export class OAuthServer {
       const decoded = Buffer.from(basic[1]!, "base64").toString("utf8");
       const i = decoded.indexOf(":");
       if (i < 0) throw new OAuthError("invalid_client", "Malformed Basic credentials", 401);
-      clientId = decodeURIComponent(decoded.slice(0, i));
-      secret = decodeURIComponent(decoded.slice(i + 1));
+      try {
+        clientId = decodeURIComponent(decoded.slice(0, i));
+        secret = decodeURIComponent(decoded.slice(i + 1));
+      } catch {
+        throw new OAuthError("invalid_client", "Malformed Basic credentials", 401);
+      }
     }
     if (!clientId) throw new OAuthError("invalid_client", "client_id is required", 401);
     let client: Client;
@@ -510,7 +532,7 @@ export class OAuthServer {
     if (!record) {
       // A rotated token presented again means it leaked: revoke the whole chain.
       const family = this.store.rotatedFamily(hash);
-      if (family) this.store.revokeFamily(family);
+      if (family) this.store.revokeFamily(family, nowSec() + this.opts.accessTokenTtlSec);
       throw new OAuthError("invalid_grant", "refresh token is invalid or was already used");
     }
     if (record.clientId !== client.id) throw new OAuthError("invalid_grant", "refresh token was issued to another client");
@@ -534,7 +556,7 @@ export class OAuthServer {
       const token = (req.body as Record<string, string | undefined>).token;
       if (!token) throw new OAuthError("invalid_request", "token is required");
       const record = this.store.getRefreshToken(sha256hex(token));
-      if (record && record.clientId === client.id) this.store.revokeFamily(record.family);
+      if (record && record.clientId === client.id) this.store.revokeFamily(record.family, nowSec() + this.opts.accessTokenTtlSec);
       res.status(200).end(); // RFC 7009: unknown tokens are not an error
     } catch (err) {
       sendOAuthError(res, err);
@@ -543,7 +565,7 @@ export class OAuthServer {
 
   private issueTokens(clientId: string, scopes: string[], resource: string, family: string) {
     const exp = nowSec() + this.opts.accessTokenTtlSec;
-    const payload = b64url(JSON.stringify({ cid: clientId, scp: scopes, aud: resource, exp, jti: randomUUID() }));
+    const payload = b64url(JSON.stringify({ cid: clientId, scp: scopes, aud: resource, exp, fam: family, jti: randomUUID() }));
     const refreshToken = b64url(randomBytes(32));
     this.store.saveRefreshToken(sha256hex(refreshToken), {
       clientId,

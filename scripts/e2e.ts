@@ -164,10 +164,10 @@ try {
 
   await step("search finds the object", async () => {
     let found = false;
-    for (let i = 0; i < 10 && !found; i++) {
+    for (let i = 0; i < 30 && !found; i++) {
       const res = await call("anytype_search", { space_id, query: marker, limit: 5 });
       found = res.data.some((o: { id: string }) => o.id === object_id);
-      if (!found) await new Promise((r) => setTimeout(r, 500)); // the index catches up asynchronously
+      if (!found) await new Promise((r) => setTimeout(r, 1000)); // full-text indexing is asynchronous (seconds)
     }
     assert.ok(found, "object appears in search results");
   });

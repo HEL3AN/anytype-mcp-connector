@@ -5,41 +5,54 @@ on:
     branches: [main]
   pull_request:
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Dependency audit (known vulnerabilities, registry signatures)
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm audit signatures
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
 
   docker:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Build image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Validate compose file
+      - name: Validate compose files
         working-directory: deploy
         run: |
           cp .env.example .env
           sed -i "s/^OWNER_PASSWORD=.*/OWNER_PASSWORD=ci-password-123/; s/^ANYTYPE_API_KEY=.*/ANYTYPE_API_KEY=ci/" .env
           docker compose config --quiet
+          docker compose -f docker-compose.yml -f compose.proxy.yml --profile host-proxy config --quiet
+          docker compose -f docker-compose.yml -f compose.offline.yml config --quiet
       - name: Check shell scripts
         run: shellcheck deploy/*.sh
       - name: Check workflows
@@ -47,12 +60,16 @@ jobs:
 
   derive-account-key:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: tools/derive-account-key
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: tools/derive-account-key/go.mod
           cache-dependency-path: tools/derive-account-key/go.sum
@@ -64,4 +81,14 @@ jobs:
           echo "$out" | sha256sum | grep -q "^$EXPECTED " || { echo "derivation output changed"; exit 1; }
         env:
           EXPECTED: c8c730ee50d06b7fac440aa6076ee444396b67b67f27f5f683e0d4a6bf5ea5fe
-      - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high

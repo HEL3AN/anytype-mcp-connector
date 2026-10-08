@@ -3,6 +3,27 @@
 All notable changes to this project. Versions follow [semantic versioning](https://semver.org); images
 are published as `ghcr.io/hel3an/anytype-mcp-connector:<version>`.
 
+## 0.4.0 — 2026-10-08
+
+Security hardening after an external-style review and a scan of the whole toolchain.
+
+- Ids that are `.`/`..` are refused (they could redirect object routes to space routes).
+- Prompt-injection guidance: workspace content is data, not instructions; chat/comment posting is
+  marked open-world; deletion always asks in Claude Code (`anthropic/requiresUserInteraction`).
+- OAuth: revoking or replaying a refresh token kills the family's access tokens immediately; global
+  limit on wrong owner passwords; unused DCR clients expire; bounded pending authorizations; CIMD
+  failures cached briefly; more non-public IPv6 forms blocked; malformed Basic credentials give 401;
+  `client_id` is escaped in logs.
+- `/mcp`: foreign browser `Origin`s refused, per-client rate limit, bounded tool input size.
+- `/readyz` publicly shows only `ok` and the version.
+- Containers: connector read-only, no capabilities, no-new-privileges, memory/pids limits; with the
+  proxy overlay the Anytype API listens on loopback only.
+- Scripts: API key no longer visible in `ps` during setup, `umask 077`, input validation.
+- nginx example: HSTS and `nosniff`.
+- Landing page: **Add to Claude** button (prefilled custom-connector dialog).
+- CI/CD: actions pinned by SHA, least-privilege permissions, `npm audit` + signatures, dependency
+  review, zizmor, Trivy (image and config), OpenSSF Scorecard, signed build provenance attestations.
+
 ## 0.3.1 — 2026-10-08
 
 - Open-source release: README, MIT license, security and privacy policies, contributing guide.

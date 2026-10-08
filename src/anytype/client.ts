@@ -86,5 +86,11 @@ export class AnytypeClient {
   }
 }
 
-/** Encodes a path segment (ids are url-safe today, but don't rely on it). */
-export const seg = encodeURIComponent;
+/**
+ * Encodes one path segment. "." and ".." are refused: URL parsing would resolve them as dot segments
+ * (also when percent-encoded), so an id like ".." could turn an object route into a space route.
+ */
+export function seg(value: string): string {
+  if (!value || /^(\.|%2e){1,2}$/i.test(value)) throw new Error(`Invalid id: ${JSON.stringify(value)}`);
+  return encodeURIComponent(value);
+}

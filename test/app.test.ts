@@ -88,6 +88,10 @@ describe("public pages", () => {
     const html = await res.text();
     assert.match(html, /https:\/\/mcp\.example\.test\/mcp/);
     assert.match(html, /rel="icon"/);
+    assert.match(
+      html,
+      /href="https:\/\/claude\.ai\/customize\/connectors\?modal=add-custom-connector&amp;connectorName=Anytype&amp;connectorUrl=https%3A%2F%2Fmcp\.example\.test%2Fmcp"/,
+    );
     assert.match(html, /name="google-site-verification" content="verify-token"/);
     assert.match(res.headers.get("content-security-policy") ?? "", /default-src 'none'/);
   });
@@ -110,6 +114,27 @@ describe("MCP endpoint with OAuth enabled", () => {
     const res = await fetch(`${server.url}/mcp`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
     assert.equal(res.status, 401);
     assert.match(res.headers.get("www-authenticate") ?? "", /resource_metadata="https:\/\/mcp\.example\.test\/\.well-known\/oauth-protected-resource\/mcp"/);
+  });
+});
+
+describe("Origin check on /mcp", () => {
+  const post = (origin?: string) =>
+    fetch(`${server.url}/mcp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(origin ? { Origin: origin } : {}) },
+      body: "{}",
+    });
+
+  test("a foreign browser Origin is refused before authentication", async () => {
+    const res = await post("https://evil.example.test");
+    assert.equal(res.status, 403);
+    assert.match(await res.text(), /Origin not allowed/);
+  });
+
+  test("no Origin, the server's own and Claude's origins reach the auth check", async () => {
+    for (const origin of [undefined, "https://mcp.example.test", "https://claude.ai", "http://localhost:6274"]) {
+      assert.equal((await post(origin)).status, 401, String(origin));
+    }
   });
 });
 

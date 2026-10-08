@@ -49,6 +49,15 @@ describe("isPublicAddress", () => {
     ["fe80::1", false],
     ["::ffff:127.0.0.1", false],
     ["::ffff:8.8.8.8", true],
+    ["::127.0.0.1", false], // IPv4-compatible
+    ["::ffff:7f00:1", false], // mapped, hex form
+    ["64:ff9b::a00:1", false], // NAT64
+    ["2002:a00:1::1", false], // 6to4
+    ["2001:0:4136:e378::1", false], // Teredo
+    ["2001:db8::1", false],
+    ["fec0::1", false],
+    ["100::1", false],
+    ["not an ip", false],
   ];
   for (const [address, expected] of cases) {
     test(`${address} -> ${expected ? "public" : "blocked"}`, () => assert.equal(isPublicAddress(address), expected));
@@ -112,6 +121,13 @@ describe("CimdResolver", () => {
       [() => new Response(JSON.stringify({ ...DOC, pad: "x".repeat(70_000) })), /too large/],
     ];
     for (const [answer, message] of answers) await assert.rejects(resolver(answer).r.resolve(ID), message);
+  });
+
+  test("failures are cached briefly, so retries don't refetch", async () => {
+    const { r, calls } = resolver(() => new Response("nope", { status: 404 }));
+    await assert.rejects(r.resolve(ID), /answered 404/);
+    await assert.rejects(r.resolve(ID), /answered 404/);
+    assert.equal(calls.length, 1);
   });
 
   test("documents are cached", async () => {

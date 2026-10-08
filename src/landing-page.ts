@@ -10,6 +10,10 @@ export function renderLandingPage(view: {
   googleSiteVerification?: string;
 }) {
   const mcpUrl = escapeHtml(view.mcpUrl);
+  // Claude's prefilled "Add custom connector" dialog (claude.com/docs, "Share an install link").
+  const installUrl = escapeHtml(
+    `https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Anytype&connectorUrl=${encodeURIComponent(view.mcpUrl)}`,
+  );
   const iconUrl = escapeHtml(view.iconUrl);
   const verification = view.googleSiteVerification
     ? `\n<meta name="google-site-verification" content="${escapeHtml(view.googleSiteVerification)}">`
@@ -43,6 +47,8 @@ export function renderLandingPage(view: {
          font:14px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap:anywhere; }
   small { display:block; margin-top:16px; color:var(--muted); }
   small a { color:inherit; }
+  .button { display:block; margin:0 0 16px; padding:12px 16px; border-radius:10px; text-align:center;
+            background:var(--text); color:var(--bg); font-weight:600; text-decoration:none; }
 </style>
 </head>
 <body>
@@ -50,7 +56,8 @@ export function renderLandingPage(view: {
   <img src="/icon-128.png" alt="Anytype" width="56" height="56">
   <h1>Anytype for Claude</h1>
   <p>A self-hosted MCP connector that lets Claude search, read and edit this Anytype workspace.</p>
-  <p>To connect, add a custom connector in Claude (Settings → Connectors) with this URL:</p>
+  <a class="button" href="${installUrl}">Add to Claude</a>
+  <p>Or add a custom connector in Claude (Settings → Connectors) with this URL:</p>
   <code>${mcpUrl}</code>
   <small>v${escapeHtml(view.version)} · <a href="https://github.com/HEL3AN/anytype-mcp-connector">source</a> · <a href="https://github.com/HEL3AN/anytype-mcp-connector/blob/main/PRIVACY.md">privacy</a></small>
 </main>

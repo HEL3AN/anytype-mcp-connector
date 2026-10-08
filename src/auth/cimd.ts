@@ -19,6 +19,9 @@ const FETCH_TIMEOUT_MS = 5_000;
 const DEFAULT_TTL_MS = 60 * 60 * 1000;
 const MIN_TTL_MS = 60 * 1000;
 const MAX_TTL_MS = 24 * 60 * 60 * 1000;
+/** Failed resolutions are remembered briefly, so random client_ids can't trigger a fetch each time. */
+const FAILURE_TTL_MS = 60 * 1000;
+const MAX_CACHE_ENTRIES = 1000;
 
 /** True when a client_id should be resolved as a metadata document URL. */
 export function isCimdClientId(clientId: string): boolean {
@@ -31,6 +34,7 @@ export function isCimdClientId(clientId: string): boolean {
  */
 export class CimdResolver {
   private readonly cache = new Map<string, { doc: ClientMetadataDocument; expiresAt: number }>();
+  private readonly failures = new Map<string, { error: CimdError; expiresAt: number }>();
 
   constructor(
     private readonly trustedHosts: string[],
@@ -41,7 +45,22 @@ export class CimdResolver {
   async resolve(clientId: string): Promise<ClientMetadataDocument> {
     const cached = this.cache.get(clientId);
     if (cached && cached.expiresAt > Date.now()) return cached.doc;
+    const failed = this.failures.get(clientId);
+    if (failed && failed.expiresAt > Date.now()) throw failed.error;
 
+    try {
+      const doc = await this.fetchDocument(clientId);
+      this.failures.delete(clientId);
+      return doc;
+    } catch (err) {
+      const error = err instanceof CimdError ? err : new CimdError(String(err));
+      remember(this.failures, clientId, { error, expiresAt: Date.now() + FAILURE_TTL_MS });
+      throw error;
+    }
+  }
+
+  private async fetchDocument(clientId: string): Promise<ClientMetadataDocument> {
+    // Policy checks first: an untrusted or malformed client_id costs no DNS lookup or fetch.
     const url = this.checkUrl(clientId);
     await this.resolveHost(url.hostname);
 
@@ -58,7 +77,7 @@ export class CimdResolver {
     if (res.status !== 200) throw new CimdError(`client metadata URL answered ${res.status}`);
 
     const doc = validateDocument(clientId, await readJson(res));
-    this.cache.set(clientId, { doc, expiresAt: Date.now() + cacheTtl(res.headers.get("cache-control")) });
+    remember(this.cache, clientId, { doc, expiresAt: Date.now() + cacheTtl(res.headers.get("cache-control")) });
     return doc;
   }
 
@@ -79,6 +98,13 @@ export class CimdResolver {
     }
     return url;
   }
+}
+
+/** Map.set with a size cap: drops the oldest entry when full. */
+function remember<V>(map: Map<string, V>, key: string, value: V) {
+  map.delete(key);
+  if (map.size >= MAX_CACHE_ENTRIES) map.delete(map.keys().next().value!);
+  map.set(key, value);
 }
 
 function validateDocument(clientId: string, raw: unknown): ClientMetadataDocument {
@@ -168,17 +194,24 @@ export function isPublicAddress(address: string): boolean {
       a >= 224
     );
   }
+  if (isIP(address) !== 6) return false;
   const v6 = address.toLowerCase();
-  if (v6.startsWith("::ffff:")) return isPublicAddress(v6.slice(7));
+  // Forms that embed or reach an IPv4 address: judge the IPv4 part (mapped ::ffff:a.b.c.d,
+  // deprecated IPv4-compatible ::a.b.c.d) or refuse outright (NAT64, 6to4, Teredo).
+  const embedded = /^::(?:ffff:)?(\d+\.\d+\.\d+\.\d+)$/.exec(v6);
+  if (embedded) return isPublicAddress(embedded[1]!);
+  if (/^::ffff:/.test(v6)) return false; // mapped address written in hex
   return !(
     v6 === "::" ||
     v6 === "::1" ||
-    v6.startsWith("fc") ||
-    v6.startsWith("fd") ||
-    v6.startsWith("fe8") ||
-    v6.startsWith("fe9") ||
-    v6.startsWith("fea") ||
-    v6.startsWith("feb") ||
-    v6.startsWith("ff")
+    /^64:ff9b:/.test(v6) || // NAT64
+    /^2002:/.test(v6) || // 6to4
+    /^2001:0?:/.test(v6) || // Teredo
+    /^2001:db8:/.test(v6) || // documentation
+    /^100::/.test(v6) || // discard-only
+    /^f[cd]/.test(v6) || // unique local
+    /^fe[89ab]/.test(v6) || // link-local
+    /^fe[c-f]/.test(v6) || // site-local (deprecated)
+    /^ff/.test(v6) // multicast
   );
 }

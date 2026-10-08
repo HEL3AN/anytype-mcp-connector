@@ -42,6 +42,8 @@ services:
       - TCP:127.0.0.1:${HOST_PROXY_PORT:-10808}
 
   anytype:
+    # Only the connector (same network namespace) needs the API: don't expose it to egress's networks.
+    command: ["serve", "--listen-address", "127.0.0.1:31012"]
     network_mode: service:egress
     networks: !reset null
     depends_on: [egress]

@@ -1,6 +1,6 @@
 {
   "name": "anytype-mcp-connector",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Self-hosted remote MCP connector that lets Claude search, read and edit your Anytype workspace",
   "scripts": {
     "dev": "tsx watch src/index.ts",
