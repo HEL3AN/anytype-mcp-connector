@@ -3,7 +3,7 @@
 All notable changes to this project. Versions follow [semantic versioning](https://semver.org); images
 are published as `ghcr.io/hel3an/anytype-mcp-connector:<version>`.
 
-## Unreleased
+## 0.3.1 — 2026-10-08
 
 - Open-source release: README, MIT license, security and privacy policies, contributing guide.
 - Container logs are rotated (3 × 10 MB per service).
