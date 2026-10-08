@@ -126,8 +126,39 @@ with an older one.
 ./backup.sh
 ```
 
-Writes `deploy/backups/<timestamp>.tar.gz` with all volumes (Anytype data and credentials, OAuth
-state, certificates). The archive is sensitive: copy it off the server encrypted.
+Stops Anytype for a few seconds and writes `deploy/backups/<timestamp>.tar.gz` (mode 600) with all
+volumes — Anytype data and credentials, OAuth state, certificates — and `deploy/.env`. The newest 14
+archives are kept (`BACKUP_KEEP=<n>`, `0` keeps all). The archive gives full access to your Anytype
+account: copy it off the server encrypted, e.g. `age -p` or `gpg -c`.
+
+Nightly backups with cron (`crontab -e`, as the user that runs Docker):
+
+```cron
+30 4 * * * cd /path/to/anytype-mcp/deploy && ./backup.sh >> backups/backup.log 2>&1
+```
+
+### Restoring
+
+```bash
+./restore.sh backups/<timestamp>.tar.gz
+```
+
+Stops the stack, replaces the contents of every volume in the archive, starts the stack again and
+checks `/readyz`. On a new server, clone the repository, put the archive into `deploy/backups/` and
+run the same command: `deploy/.env` is taken from the archive when it does not exist yet. Existing
+Claude connections keep working, because the OAuth signing key and refresh tokens are restored too.
+
+**Checking a backup on another machine.** The restored copy is the same Anytype *device* as the
+server; never let both sync at the same time. Restore it with the network cut off:
+
+```bash
+COMPOSE_FILE=docker-compose.yml:compose.offline.yml COMPOSE_PROFILES= ./restore.sh backups/<timestamp>.tar.gz
+docker compose exec anytype anytype space list
+COMPOSE_FILE=docker-compose.yml:compose.offline.yml COMPOSE_PROFILES=caddy docker compose down -v   # remove the copy
+```
+
+Anytype logs `unable to connect` in this mode; that is expected. Pre-pull the images
+(`docker pull ...`) before running it on a machine that has never run the stack.
 
 ## Operations
 

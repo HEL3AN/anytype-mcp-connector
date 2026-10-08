@@ -53,8 +53,10 @@ for v in "${volumes[@]}"; do
     --label "com.docker.compose.project=$project" \
     --label "com.docker.compose.volume=$v" \
     "${project}_${v}" >/dev/null
-  docker run --rm -v "${project}_${v}:/v" -v "$archive_dir:/b:ro" alpine sh -c \
-    "find /v -mindepth 1 -delete && tar xzf '/b/$archive_name' -C /v --strip-components=1 '$v/'"
+  # Mounted as /r/<volume> and extracted without --strip-components, so the volume root also gets its
+  # archived owner and mode (the connector runs as uid 1000 and must be able to write /data).
+  docker run --rm -v "${project}_${v}:/r/$v" -v "$archive_dir:/b:ro" alpine sh -c \
+    "find '/r/$v' -mindepth 1 -delete && tar xzf '/b/$archive_name' -C /r '$v/'"
 done
 
 echo "==> Starting the stack"
