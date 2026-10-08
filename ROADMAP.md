@@ -31,11 +31,16 @@ Each open item links to a GitHub issue with context and a definition of done.
 - Tool UX: 23 tools (collections/queries, comments, chats, templates, members, schemas), compact
   output with paging hints, markdown paging, Anytype hints mapped to tool calls, cacheable tool list — #5
 - Open-source release: README, MIT, SECURITY, PRIVACY, CONTRIBUTING, CHANGELOG, Dependabot — #7
+- Security audit and hardening (v0.4.0): external-style code review, CodeQL, zizmor, Trivy, OSV,
+  Scorecard, npm audit + signatures, govulncheck; SHA-pinned actions, signed provenance attestations,
+  hardened containers, prompt-injection guidance, OAuth fixes; Add to Claude button
 
 ## Next (in order)
 
 1. **Directory** — Anyproto permission, submission materials — #8
 2. **Tool UX round 2** — refine tool descriptions from real use; links, files — #10
+3. **Audit follow-ups** — Node 26 LTS (November), next anytype-cli, structuredContent/MCP App, OAuth
+   read/write scopes, distroless — #12
 
 ## Known issues
 
