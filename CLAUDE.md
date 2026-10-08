@@ -4,9 +4,8 @@ Guide for AI coding agents (and humans) working on this repository: what the pro
 built, tested and released, and the non-obvious things learned the hard way.
 Open work is tracked in **GitHub Issues** (`gh issue list`) and summarized in `ROADMAP.md`.
 
-**Maintainer sessions:** the maintainer's deployment notes (production server, workstation) live in a
-private repo. If you have access, read them too: `../anytype-mcp-ops/OPERATIONS.md`
-(`gh repo clone HEL3AN/anytype-mcp-ops ../anytype-mcp-ops`). Without access, ignore this.
+**Maintainer sessions:** a git-ignored `CLAUDE.local.md` next to this file, if present, holds the
+maintainer's deployment notes (production server, workstation). Never commit it or quote it publicly.
 
 ## What this is
 

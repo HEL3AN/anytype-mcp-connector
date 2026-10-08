@@ -30,13 +30,12 @@ Each open item links to a GitHub issue with context and a definition of done.
   `npm run e2e` against the real Anytype test space — #4
 - Tool UX: 23 tools (collections/queries, comments, chats, templates, members, schemas), compact
   output with paging hints, markdown paging, Anytype hints mapped to tool calls, cacheable tool list — #5
+- Open-source release: README, MIT, SECURITY, PRIVACY, CONTRIBUTING, CHANGELOG, Dependabot — #7
 
 ## Next (in order)
 
-1. **Open source** — README, LICENSE, SECURITY, privacy policy, strip private notes — #7
-2. **Directory** — Anyproto permission, submission materials — #8
-
-3. **Owner feedback round** — refine tool descriptions from real use; links, files — #10
+1. **Directory** — Anyproto permission, submission materials — #8
+2. **Tool UX round 2** — refine tool descriptions from real use; links, files — #10
 
 ## Known issues
 

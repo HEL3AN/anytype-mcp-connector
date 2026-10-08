@@ -9,3 +9,7 @@ tools/derive-account-key/*.exe
 data/
 deploy/backups/
 deploy/nginx/*.conf
+
+# Personal Claude Code files (CLAUDE.local.md: maintainer's private deployment notes)
+.claude/settings.local.json
+CLAUDE.local.md
