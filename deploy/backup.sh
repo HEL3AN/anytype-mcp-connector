@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Back up all persistent volumes to deploy/backups/<timestamp>.tar.gz: ./backup.sh
-# WARNING: the archive contains your Anytype account credentials and local data. Store it encrypted.
-# Restore: stop the stack, then for each volume
-#   docker run --rm -v anytype-mcp_<vol>:/v -v "$PWD/backups":/b alpine sh -c 'cd /v && tar xzf /b/<file> <vol>/ --strip-components=1'
+# Back up all persistent volumes and deploy/.env to deploy/backups/<timestamp>.tar.gz: ./backup.sh
+# WARNING: the archive contains your Anytype account credentials, local data, the API key and the owner
+# password. Store it encrypted. Restore with ./restore.sh (see docs/deploy.md).
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -14,12 +13,13 @@ chmod 700 backups
 
 mounts=()
 for v in "${volumes[@]}"; do mounts+=(-v "${project}_${v}:/src/${v}:ro"); done
+mounts+=(-v "$PWD/.env:/src/config/.env:ro")
 
 echo "==> Stopping anytype for a consistent snapshot"
 docker compose stop anytype
 trap 'docker compose start anytype >/dev/null' EXIT
 
 docker run --rm "${mounts[@]}" -v "$PWD/backups:/backups" alpine \
-  tar czf "/backups/${stamp}.tar.gz" -C /src "${volumes[@]}"
+  tar czf "/backups/${stamp}.tar.gz" -C /src "${volumes[@]}" config
 chmod 600 "backups/${stamp}.tar.gz"
 echo "Backup written to deploy/backups/${stamp}.tar.gz"

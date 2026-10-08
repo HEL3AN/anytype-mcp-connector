@@ -1,0 +1,9 @@
+# Overlay that cuts the stack off the internet, for checking a restored backup on another machine
+# without letting that copy sync (it shares the server's Anytype device identity).
+#   COMPOSE_FILE=docker-compose.yml:compose.offline.yml ./restore.sh backups/<timestamp>.tar.gz
+# Published ports do not work on internal networks: talk to the connector via `docker compose exec`.
+networks:
+  backend:
+    internal: true
+  web:
+    internal: true
