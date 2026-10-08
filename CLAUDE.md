@@ -53,6 +53,12 @@ MCP_URL=http://localhost:3100/mcp npm run smoke -- --write   # full tool cycle (
 OWNER_PASSWORD=... BASE_URL=https://anytype.example.com npm run oauth-e2e   # 34 OAuth checks (CIMD, DCR, iss, …), works against prod
 ```
 
+Releasing: bump `version` in `package.json` (+ `npm install --package-lock-only`), commit, then
+`git tag vX.Y.Z && git push origin vX.Y.Z`. `.github/workflows/release.yml` checks the tag against
+`package.json`, pushes `ghcr.io/hel3an/anytype-mcp-connector:{X.Y.Z,X.Y,latest}` (amd64+arm64, SBOM,
+provenance), smoke-tests `/healthz` and creates a GitHub release. Production runs the released image
+(`CONNECTOR_IMAGE` in `deploy/.env`); `update.sh` pulls it.
+
 Local Anytype desktop API: `http://127.0.0.1:31009` (v2 since desktop 0.57.4). `.env.local` holds a
 scoped key **API_TEST** that may only touch the test space `API_TEST` — do writes there, never in the
 owner's real spaces.
@@ -63,8 +69,9 @@ owner's real spaces.
   `C:\Windows\System32\OpenSSH\ssh.exe` (Git Bash's `ssh` gets "Permission denied (publickey)").
   `sudo` needs the owner's password — ask the owner to run sudo steps.
 - Checkout: `~/projects/anytype-mcp-connector` (read-only deploy key, SSH alias `<github-ssh-alias>`).
-- Deploy/update: `cd ~/projects/anytype-mcp-connector/deploy && ./update.sh` (git pull, rebuild,
-  `/readyz` check, automatic rollback of the connector image).
+- Deploy/update: `cd ~/projects/anytype-mcp-connector/deploy && ./update.sh` (git pull, pull the
+  released image — or rebuild when `CONNECTOR_IMAGE` is empty — `/readyz` check, automatic rollback).
+  Server code changes therefore reach production only through a release tag.
 - `deploy/.env` (mode 600, never print it): `DOMAIN`, `OWNER_PASSWORD`, `ANYTYPE_API_KEY`,
   `COMPOSE_FILE=docker-compose.yml:compose.proxy.yml`, `COMPOSE_PROFILES=host-proxy`,
   `HOST_PROXY_PORT=10808`, `GOOGLE_SITE_VERIFICATION`. Read a value without printing it, e.g.
@@ -127,6 +134,6 @@ owner's real spaces.
 - Never print or commit secrets (`.env*`, keys, passwords, account key). The user once pasted keys in chat;
   don't repeat them.
 - Commit messages end with the `Co-Authored-By` line from the session's attribution instructions.
-- After changing server code: typecheck → local check → commit/push → wait for CI → `update.sh` on the
-  server → `oauth-e2e` against production.
+- After changing server code: typecheck → local check → commit/push → wait for CI → release tag → wait for
+  the Release workflow → `update.sh` on the server → `oauth-e2e` against production.
 - Keep `ROADMAP.md` checkboxes and GitHub issues in sync with reality.

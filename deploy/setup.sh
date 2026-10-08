@@ -2,7 +2,8 @@
 # First-time setup on the server. Run from the deploy/ directory: ./setup.sh
 # - starts headless Anytype, logs it into your account (account key) or creates a bot account
 # - creates a scoped API key for the connector and stores it in .env
-# - builds and starts the whole stack, then checks readiness
+# - starts the whole stack (pulls the released connector image if CONNECTOR_IMAGE names a registry
+#   image, otherwise builds it from this checkout), then checks readiness
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -139,8 +140,15 @@ if [ -z "$(env_value ANYTYPE_API_KEY)" ]; then
 fi
 
 echo
-echo "==> Building and starting the stack"
-compose up -d --build
+image=$(env_value CONNECTOR_IMAGE || true)
+if [[ "$image" == */* ]]; then
+  echo "==> Pulling $image and starting the stack"
+  docker pull "$image"
+  compose up -d --no-build
+else
+  echo "==> Building and starting the stack"
+  compose up -d --build
+fi
 
 echo "==> Waiting for the connector to become ready"
 for _ in $(seq 1 30); do

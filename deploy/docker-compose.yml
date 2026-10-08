@@ -23,6 +23,8 @@ services:
     networks: [backend]
 
   connector:
+    # Built from this checkout by default; set CONNECTOR_IMAGE=ghcr.io/... in .env to run a released
+    # image instead (setup.sh/update.sh then pull it and never build).
     image: ${CONNECTOR_IMAGE:-anytype-mcp-connector:local}
     build: ..
     restart: unless-stopped

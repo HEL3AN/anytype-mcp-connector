@@ -1,6 +1,6 @@
 {
   "name": "anytype-mcp-connector",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Remote MCP connector for Anytype (Claude)",
   "scripts": {
     "dev": "tsx watch src/index.ts",

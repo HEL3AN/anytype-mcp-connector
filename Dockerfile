@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1
 
-FROM node:24-alpine AS build
+# The build stage runs on the builder's native platform: the output (dist + production node_modules)
+# is plain JavaScript, so it is identical for every target architecture.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -9,6 +11,8 @@ COPY src ./src
 RUN npm run build && npm prune --omit=dev
 
 FROM node:24-alpine
+LABEL org.opencontainers.image.source="https://github.com/HEL3AN/anytype-mcp-connector" \
+      org.opencontainers.image.description="Remote MCP server that connects Claude to Anytype"
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3000 \

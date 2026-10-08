@@ -5,7 +5,7 @@ The stack runs three containers with Docker Compose:
 | Service     | Image                              | Role                                                     |
 |-------------|------------------------------------|----------------------------------------------------------|
 | `anytype`   | `ghcr.io/anyproto/anytype-cli`     | Headless Anytype: syncs your spaces, serves the JSON API |
-| `connector` | built from this repository         | MCP server + OAuth for Claude                            |
+| `connector` | built from this repository, or `ghcr.io/hel3an/anytype-mcp-connector` | MCP server + OAuth for Claude |
 | `caddy`     | `caddy`                            | HTTPS with automatic Let's Encrypt certificates          |
 
 The Anytype API is reachable only from the connector. The connector is published on
@@ -97,8 +97,24 @@ cd anytype-mcp/deploy
 ./update.sh
 ```
 
-It pulls the repository and the pinned images, rebuilds the connector, restarts the stack and checks
+It pulls the repository and the pinned images, updates the connector, restarts the stack and checks
 `/readyz`. If the new connector fails to become ready, the previous image is restored.
+
+**Released images (recommended).** Every release publishes a multi-arch image (linux/amd64, linux/arm64)
+to GHCR, so the server does not need to build anything. In `deploy/.env`:
+
+```bash
+CONNECTOR_IMAGE=ghcr.io/hel3an/anytype-mcp-connector:latest   # newest release
+# CONNECTOR_IMAGE=ghcr.io/hel3an/anytype-mcp-connector:0.2      # newest 0.2.x
+# CONNECTOR_IMAGE=ghcr.io/hel3an/anytype-mcp-connector:0.2.0    # exactly this version
+```
+
+`update.sh` then pulls that tag instead of building. To go back to a known-good version after a bad
+release, pin its exact tag and run `./update.sh` again. Leave `CONNECTOR_IMAGE` empty to build from
+your checkout (for local changes or forks).
+
+While the GHCR package is private, log the server in once with a token that has `read:packages`:
+`docker login ghcr.io -u <github-user>` (paste the token as the password).
 
 To update headless Anytype or Caddy, change `ANYTYPE_CLI_IMAGE` / `CADDY_IMAGE` in `deploy/.env` and
 run `./update.sh`. Pin exact versions: an Anytype API key created by a newer anytype-cli does not work
