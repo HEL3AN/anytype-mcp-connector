@@ -4,7 +4,7 @@ go 1.25.7
 
 require (
 	github.com/anyproto/any-sync v0.11.21
-	golang.org/x/term v0.41.0
+	golang.org/x/term v0.43.0
 )
 
 require (
@@ -31,9 +31,9 @@ require (
 	github.com/multiformats/go-varint v0.1.0 // indirect
 	github.com/planetscale/vtprotobuf v0.6.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
-	golang.org/x/crypto v0.49.0 // indirect
+	golang.org/x/crypto v0.52.0 // indirect
 	golang.org/x/exp v0.0.0-20260212183809-81e46e3db34a // indirect
-	golang.org/x/sys v0.42.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
 )
