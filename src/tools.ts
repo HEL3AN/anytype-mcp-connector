@@ -3,6 +3,14 @@ import { z } from "zod";
 import { AnytypeApiError, type AnytypeClient, seg } from "./anytype/client.js";
 import { resolvePublicAddresses } from "./auth/cimd.js";
 import { formatApiError, formatIssues, type ApiIssue } from "./hints.js";
+import {
+  MCP_APP_MIME_TYPE,
+  OBJECTS_VIEW_URI,
+  objectsViewHtml,
+  objectsViewResourceMeta,
+  objectsViewToolMeta,
+  type ObjectsView,
+} from "./objects-view.js";
 
 const EDIT_OPS = [
   "set_properties",
@@ -137,6 +145,68 @@ async function checkPublicUrl(raw: string): Promise<void> {
   } catch (err) {
     throw new Error(`url refused: ${err instanceof Error ? err.message : String(err)}`);
   }
+}
+
+/** Objects per anytype_show_objects card. */
+const MAX_SHOWN = 12;
+
+/** A select/multi-select value as text (the API returns option names, one or a list). */
+const optionText = (value: unknown) =>
+  Array.isArray(value) ? value.map(String).join(", ") || undefined : typeof value === "string" && value ? value : undefined;
+
+/** Data for the objects card: one search for all rows, plus type names and the full space id for links. */
+async function buildObjectsView(api: AnytypeClient, space_id: string, objectIds: string[], title: string | undefined, canEdit: boolean) {
+  const ids = [...new Set(objectIds)];
+  const valid = ids.filter((id) => /^[\w.-]+$/.test(id));
+  const base = `/v2/spaces/${seg(space_id)}`;
+  type Row = { id: string; name?: string; type?: string; properties?: Record<string, unknown> };
+  const [rows, types, space] = await Promise.all([
+    valid.length
+      ? api.post<{ data?: Row[] }>(
+          `${base}/search`,
+          { filter: `id IN (${valid.map((id) => `"${id}"`).join(", ")})`, fields: ["done", "due_date", "status", "tag"] },
+          { limit: valid.length },
+        )
+      : Promise.resolve({ data: { data: [] as Row[] } }),
+    api.get<{ data?: { key: string; name?: string }[] }>(`${base}/types`, { limit: 100 }).catch(() => ({ data: { data: [] } })),
+    api.get<{ id?: string }>(base, { ids: "full" }).catch(() => ({ data: { id: space_id } })),
+  ]);
+  const typeNames = new Map((types.data.data ?? []).map((t) => [t.key, t.name ?? t.key]));
+  const byId = new Map((rows.data.data ?? []).map((r) => [r.id, r]));
+  const fullSpaceId = space.data.id ?? space_id;
+  const view: ObjectsView = { ...(title ? { title } : {}), space_id, can_edit: canEdit, objects: [] };
+  for (const id of ids) {
+    const r = byId.get(id);
+    if (!r) {
+      (view.missing ??= []).push(id);
+      continue;
+    }
+    const p = r.properties ?? {};
+    const due = typeof p.due_date === "string" ? p.due_date.slice(0, 10) : undefined;
+    const tags = Array.isArray(p.tag) ? p.tag.map(String) : undefined;
+    view.objects.push({
+      id,
+      name: r.name || "Untitled",
+      ...(r.type ? { type: typeNames.get(r.type) ?? r.type } : {}),
+      ...(typeof p.done === "boolean" ? { done: p.done } : {}),
+      ...(due ? { due } : {}),
+      ...(optionText(p.status) ? { status: optionText(p.status) } : {}),
+      ...(tags?.length ? { tags } : {}),
+      link: `anytype://object?objectId=${encodeURIComponent(id)}&spaceId=${encodeURIComponent(fullSpaceId)}`,
+    });
+  }
+  return view;
+}
+
+/** The card as text, for hosts without MCP Apps (and for the model). */
+function objectsViewText(view: ObjectsView): string {
+  const lines = view.objects.map((o) => {
+    const box = typeof o.done === "boolean" ? (o.done ? "[x] " : "[ ] ") : "";
+    const meta = [o.type, o.due && `due ${o.due}`, o.status, ...(o.tags ?? []).map((t) => `#${t}`)].filter(Boolean).join(", ");
+    return `- ${box}${o.name}${meta ? ` (${meta})` : ""} — id ${o.id}`;
+  });
+  if (view.missing?.length) lines.push(`Not found (yet): ${view.missing.join(", ")}`);
+  return [`Shown to the user as a card${view.title ? ` "${view.title}"` : ""}:`, ...lines].join("\n");
 }
 
 /** Most backlinks listed per object. */
@@ -1033,6 +1103,38 @@ Show it in a page with markdown ![caption](<file id>) (anytype_edit_object inser
           return ok({ id: file_id, mime_type: mimeType, text: body, ...(all.length > body.length ? { truncated: { total_chars: all.length } } : {}) });
         }
         return ok({ id: file_id, mime_type: mimeType, size: data.length, note: "This format can't be returned as text or an image." });
+      }),
+  );
+
+  // --- MCP App: interactive card ---------------------------------------------------------------
+
+  server.registerResource(
+    "Anytype objects card",
+    OBJECTS_VIEW_URI,
+    { mimeType: MCP_APP_MIME_TYPE, description: "Interactive list card for anytype_show_objects" },
+    async () => ({
+      contents: [{ uri: OBJECTS_VIEW_URI, mimeType: MCP_APP_MIME_TYPE, text: objectsViewHtml(), _meta: objectsViewResourceMeta }],
+    }),
+  );
+
+  server.registerTool(
+    "anytype_show_objects",
+    {
+      title: "Show objects to the user",
+      description: `Show objects to the user as an interactive card in the chat: name, type, due date, status and tags, a checkbox to mark tasks done, and a tap opens the object in Anytype.
+Use it when the user wants to see or review a set of objects ("show my tasks for this week"), after finding them with anytype_search; at most ${MAX_SHOWN}, in the order given. Don't use it just to read content (anytype_fetch / anytype_fetch_many). Clients without interactive cards show the same list as text.`,
+      inputSchema: z.object({
+        space_id: spaceId,
+        object_ids: z.array(z.string().min(1)).min(1).max(MAX_SHOWN).describe("Objects to show, in display order"),
+        title: z.string().max(200).optional().describe('Card heading, e.g. "Tasks due this week"'),
+      }),
+      annotations: READ_ONLY,
+      _meta: objectsViewToolMeta,
+    },
+    ({ space_id, object_ids, title }) =>
+      run(async () => {
+        const view = await buildObjectsView(api, space_id, object_ids, title, !readOnly);
+        return { content: [{ type: "text", text: objectsViewText(view) }], structuredContent: view as unknown as Record<string, unknown> };
       }),
   );
 }

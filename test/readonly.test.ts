@@ -115,6 +115,8 @@ describe("access level chosen on the consent page", () => {
         /anytype_create_object disabled/,
       );
       assert.equal(anytype.requests.filter((r) => r.method !== "GET").length, 0, "nothing reached Anytype");
+      const card = await client.callTool({ name: "anytype_show_objects", arguments: { space_id: "s", object_ids: ["a"] } });
+      assert.equal((card.structuredContent as { can_edit: boolean }).can_edit, false, "card checkboxes are read-only");
       const { prompts } = await client.listPrompts();
       assert.ok(!prompts.some((p) => p.name === "meeting_to_tasks"), "no prompt that writes");
     } finally {

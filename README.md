@@ -54,6 +54,7 @@ desktop apps), this one is a **remote** connector, so it also works in the Claud
 | Comments & chats | `anytype_list_comments`, `anytype_add_comment`, `anytype_list_chats`, `anytype_read_chat`, `anytype_send_chat_message`, `anytype_edit_chat_message`, `anytype_delete_chat_message`, `anytype_react_to_message`, `anytype_create_chat` |
 | Files | `anytype_upload_file` (from a public URL; embed with `![caption](<file id>)`), `anytype_get_file` (images come back as images, text files as text) |
 | Spaces | `anytype_get_space`, `anytype_update_space` (name, description) |
+| Show | `anytype_show_objects`: an interactive card in the chat (claude.ai, desktop, mobile) — tick tasks off, tap to open in Anytype; other clients get the same list as text |
 | Schema | `anytype_list_types`, `anytype_get_type`, `anytype_create_type`, `anytype_update_type`, `anytype_list_properties`, `anytype_create_property`, `anytype_update_property`, `anytype_list_property_options`, `anytype_list_templates`, `anytype_list_members`, `anytype_get_op_schema`, `anytype_get_schema` |
 
 Prompts (shown as commands in Claude): **Weekly review**, **Meeting notes → tasks**, **Topic brief**.

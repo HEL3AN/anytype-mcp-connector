@@ -32,7 +32,8 @@ Claude ──HTTPS──▶ reverse proxy (Caddy or host nginx, TLS) ──▶ c
 | `src/index.ts` | Entry point: loads `.env*`, `loadConfig()`, `createApp()`, listen, graceful shutdown |
 | `src/app.ts` | `createApp(config, {api?, cimdResolver?, log?})`: host validation, request log, `/`, icons, `/healthz`, `/readyz`, OAuth routes, `/mcp` |
 | `src/config.ts` | `loadConfig(env)` — pure, validated; `loadEnvFiles()` |
-| `src/tools.ts` | All 36 MCP tools (Anytype API v2): search/fetch/edit, collections & queries, comments & chats, files, spaces, types & properties, templates, members. Compact JSON output, `next_offset`, markdown paging. Tool annotations are required for the directory |
+| `src/tools.ts` | All 37 MCP tools (Anytype API v2): search/fetch/edit, collections & queries, comments & chats, files, spaces, types & properties, templates, members. Compact JSON output, `next_offset`, markdown paging. Tool annotations are required for the directory |
+| `src/objects-view.ts` | MCP App for `anytype_show_objects`: `ui://` HTML card with the ext-apps client bundle inlined (its `export{}` list rewritten to a local object) |
 | `src/prompts.ts` | MCP prompts (canned workflows: weekly review, meeting notes → tasks, topic brief) |
 | `src/hints.ts` | Turns Anytype errors/warnings (`issues[].hint` + `see_also` operationIds) into text with the next **tool** call |
 | `src/anytype/client.ts` | Thin fetch client for the Anytype JSON API v2 (ETag, error passthrough) |
@@ -145,6 +146,14 @@ writes there and refuses any other space. Never point tests at real spaces.
 - `_meta["anthropic/requiresUserInteraction"]: true` makes Claude Code prompt on every call (used on delete).
 - Prefilled install link: `https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=…&connectorUrl=<percent-encoded>`
   (the landing page's **Add to Claude** button).
+- MCP Apps: a tool with `_meta.ui.resourceUri` (+ legacy `ui/resourceUri`) renders that `ui://` resource
+  (`text/html;profile=mcp-app`) in a sandboxed iframe **on every call** — only put UI on a tool Claude calls
+  to show something, never on search/fetch. Data goes in `structuredContent`; text `content` is the
+  fallback (Claude Code shows no UI). The widget calls tools via `app.callServerTool` (disabled tools fail
+  → read-only cards get `can_edit: false`). `@modelcontextprotocol/ext-apps` 2.x pairs with SDK v2. Bump the
+  `ui://…-vN` URI when the HTML changes (hosts cache by URI). Theme: host CSS variables
+  (`--color-text-primary`, …), transparent body, `color-scheme: light dark`. Local check: an `AppBridge`
+  harness bundled with esbuild + headless Edge screenshot (no Claude needed).
 - Connectors directory (claude.ai/directory/manage): annotations + title on every tool, OAuth, docs URL,
   privacy policy URL, test account, icon; the "first-party API" acknowledgment means a listing needs
   Anyproto's permission (#8). Escalations: mcp-review@anthropic.com.

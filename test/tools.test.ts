@@ -36,7 +36,7 @@ async function call(name: string, args: Record<string, unknown> = {}) {
 describe("tool list", () => {
   test("every tool has a title and read-only/destructive hints (directory requirement)", async () => {
     const { tools } = await client.listTools();
-    assert.equal(tools.length, 36);
+    assert.equal(tools.length, 37);
     for (const tool of tools) {
       assert.ok(tool.title ?? tool.annotations?.title, `${tool.name} has a title`);
       assert.equal(typeof tool.annotations?.readOnlyHint, "boolean", `${tool.name} readOnlyHint`);
@@ -453,6 +453,64 @@ describe("schema, spaces, chats and files", () => {
     const pdf = JSON.parse((await call("anytype_get_file", { space_id: "s", file_id: "pdf" })).text);
     assert.equal(pdf.mime_type, "application/pdf");
     assert.equal(pdf.text, undefined);
+  });
+});
+
+describe("interactive card (MCP App)", () => {
+  test("show_objects links its UI, reads all rows in one search and keeps the given order", async () => {
+    reply = (req) => {
+      if (req.method === "POST")
+        return {
+          body: {
+            data: [
+              { id: "b", name: "Write report", type: "task", properties: { done: false, due_date: "2026-10-12T00:00:00Z", tag: ["Work"], status: "In progress" } },
+              { id: "a", name: "Notes", type: "page", properties: {} },
+            ],
+          },
+        };
+      if (req.path.endsWith("/types")) return { body: { data: [{ key: "task", name: "Task" }, { key: "page", name: "Page" }] } };
+      return { body: { id: "space.full" } };
+    };
+    const { tools } = await client.listTools();
+    const tool = tools.find((t) => t.name === "anytype_show_objects");
+    assert.deepEqual(tool?._meta?.ui, { resourceUri: "ui://anytype/objects-v1.html" });
+    assert.equal(tool?.annotations?.readOnlyHint, true);
+
+    const res = await client.callTool({ name: "anytype_show_objects", arguments: { space_id: "s", object_ids: ["a", "b", "zz"], title: "Week" } });
+    const search = anytype.requests.find((r) => r.method === "POST");
+    assert.deepEqual(search?.body, { filter: 'id IN ("a", "b", "zz")', fields: ["done", "due_date", "status", "tag"] });
+    assert.deepEqual(res.structuredContent, {
+      title: "Week",
+      space_id: "s",
+      can_edit: true,
+      objects: [
+        { id: "a", name: "Notes", type: "Page", link: "anytype://object?objectId=a&spaceId=space.full" },
+        {
+          id: "b",
+          name: "Write report",
+          type: "Task",
+          done: false,
+          due: "2026-10-12",
+          status: "In progress",
+          tags: ["Work"],
+          link: "anytype://object?objectId=b&spaceId=space.full",
+        },
+      ],
+      missing: ["zz"],
+    });
+    assert.match(resultText(res), /- \[ \] Write report \(Task, due 2026-10-12, In progress, #Work\)/);
+  });
+
+  test("the card resource is an MCP App page with the client inlined (no CDN)", async () => {
+    const { resources } = await client.listResources();
+    assert.ok(resources.some((r) => r.uri === "ui://anytype/objects-v1.html"));
+    const res = await client.readResource({ uri: "ui://anytype/objects-v1.html" });
+    const [content] = res.contents as { mimeType: string; text: string; _meta?: { ui?: { csp?: unknown } } }[];
+    assert.equal(content?.mimeType, "text/html;profile=mcp-app");
+    assert.match(content!.text, /const __ext=\{/);
+    assert.match(content!.text, /"App":/);
+    assert.doesNotMatch(content!.text, /unpkg|jsdelivr|<script[^>]+src=/);
+    assert.ok(content!.text.length < 600_000);
   });
 });
 

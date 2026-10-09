@@ -3,6 +3,13 @@
 All notable changes to this project. Versions follow [semantic versioning](https://semver.org); images
 are published as `ghcr.io/hel3an/anytype-mcp-connector:<version>`.
 
+## Unreleased
+
+- Interactive card (MCP App): `anytype_show_objects` shows a list of objects in the chat with name,
+  type, due date, status and tags; tasks get a checkbox that marks them done (not in read-only
+  connections), and a tap opens the object in Anytype. The MCP Apps client is inlined from
+  `@modelcontextprotocol/ext-apps`, so the card loads nothing from CDNs; it follows Claude's theme.
+
 ## 0.6.0 — 2026-10-09
 
 - Read-only connections: the consent page offers *Read and edit* or *Read only*. OAuth scopes are now

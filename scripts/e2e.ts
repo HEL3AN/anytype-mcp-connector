@@ -266,6 +266,17 @@ try {
     }
     assert.ok(found, "object appears in search results");
   });
+
+  await step("interactive card: show_objects returns the card data", async () => {
+    const res = await client.callTool({ name: "anytype_show_objects", arguments: { space_id, object_ids: [object_id], title: "e2e" } });
+    assert.ok(!res.isError, resultText(res));
+    const view = res.structuredContent as { can_edit: boolean; objects: { id: string; name: string; link: string }[] };
+    assert.equal(view.can_edit, true);
+    assert.equal(view.objects[0]?.id, object_id);
+    assert.match(view.objects[0]!.link, /^anytype:\/\/object\?objectId=.+&spaceId=.+\..+/);
+    const html = await client.readResource({ uri: "ui://anytype/objects-v1.html" });
+    assert.ok((html.contents[0] as { text: string }).text.includes("__ext"), "card HTML");
+  });
 } finally {
   for (const id of [...extraIds, ...(object_id ? [object_id] : [])]) {
     await step(`delete ${id.slice(-6)}`, async () => {
