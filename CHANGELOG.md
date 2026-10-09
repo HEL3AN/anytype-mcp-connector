@@ -3,7 +3,7 @@
 All notable changes to this project. Versions follow [semantic versioning](https://semver.org); images
 are published as `ghcr.io/hel3an/anytype-mcp-connector:<version>`.
 
-## Unreleased
+## 0.5.0 — 2026-10-09
 
 Fewer round-trips when Claude gathers context from many pages (owner feedback: a long run of
 one-page `fetch` calls in Claude Code).
