@@ -34,12 +34,13 @@ Each open item links to a GitHub issue with context and a definition of done.
 - Security audit and hardening (v0.4.0): external-style code review, CodeQL, zizmor, Trivy, OSV,
   Scorecard, npm audit + signatures, govulncheck; SHA-pinned actions, signed provenance attestations,
   hardened containers, prompt-injection guidance, OAuth fixes; Add to Claude button
+- Tool UX round 2 (v0.5.0): batch reads, search snippets, backlinks, mention links; types &
+  properties, files, chat actions, spaces; MCP prompts — 36 tools — #10
 
 ## Next (in order)
 
 1. **Directory** — Anyproto permission, submission materials — #8
-2. **Tool UX round 2** — fewer round-trips (batch read, search snippets, links), then schema
-   authoring, files, chat actions, spaces, MCP prompts — #10
+2. **Tool UX leftovers** — chat mark-read and unread counters with the next anytype-cli — #10
 3. **Audit follow-ups** — Node 26 LTS (November), next anytype-cli, structuredContent/MCP App, OAuth
    read/write scopes, distroless — #12
 
