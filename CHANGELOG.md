@@ -3,6 +3,11 @@
 All notable changes to this project. Versions follow [semantic versioning](https://semver.org); images
 are published as `ghcr.io/hel3an/anytype-mcp-connector:<version>`.
 
+## 0.7.2 — 2026-10-09
+
+- Search: spaces without a `snippet` property no longer add a warning to every result (the connector
+  asks for snippets on its own, so it drops those warnings unless the caller asked for `snippet`).
+
 ## 0.7.1 — 2026-10-09
 
 - Card fixes from the first real use: tasks always get a checkbox (their `done` is empty until first

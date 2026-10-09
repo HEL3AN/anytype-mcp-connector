@@ -111,6 +111,21 @@ describe("requests sent to Anytype", () => {
     assert.deepEqual(req?.query, { limit: "2" });
   });
 
+  test("warnings about the snippet field the connector added are dropped", async () => {
+    reply = () => ({
+      body: {
+        data: [{ id: "a" }],
+        warnings: [
+          { path: "/fields/0", message: 'field "snippet" is not a property of space "x" — omitted from those rows' },
+          { path: "/filter", message: "something else" },
+        ],
+      },
+    });
+    const res = await call("anytype_search", { query: "x" });
+    assert.doesNotMatch(res.text, /snippet/);
+    assert.match(res.text, /something else/);
+  });
+
   test("search always asks for snippets, keeping requested fields", async () => {
     await call("anytype_search", { query: "x", fields: ["status", "snippet"] });
     assert.deepEqual((anytype.requests[0]?.body as { fields: string[] }).fields, ["snippet", "status"]);

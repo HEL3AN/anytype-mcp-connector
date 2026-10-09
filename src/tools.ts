@@ -391,7 +391,14 @@ Rows carry a short snippet of the body (properties.snippet). To read several hit
       run(async () => {
         const path = space_id ? `/v2/spaces/${seg(space_id)}/search` : "/v2/search";
         const fields = [...new Set(["snippet", ...(body.fields ?? [])])];
-        return ok((await api.post(path, { ...body, fields }, { limit, offset })).data);
+        const res = await api.post<Json>(path, { ...body, fields }, { limit, offset });
+        // Spaces without a snippet property warn about it; drop that noise unless the caller asked for snippet.
+        if (!body.fields?.includes("snippet") && Array.isArray(res.data.warnings)) {
+          const { warnings: all, ...rest } = res.data;
+          const warnings = (all as ApiIssue[]).filter((w) => !/"snippet"/.test(w.message));
+          return ok(warnings.length ? { ...rest, warnings } : rest);
+        }
+        return ok(res.data);
       }),
   );
 
