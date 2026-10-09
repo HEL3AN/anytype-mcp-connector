@@ -36,7 +36,7 @@ async function call(name: string, args: Record<string, unknown> = {}) {
 describe("tool list", () => {
   test("every tool has a title and read-only/destructive hints (directory requirement)", async () => {
     const { tools } = await client.listTools();
-    assert.equal(tools.length, 23);
+    assert.equal(tools.length, 24);
     for (const tool of tools) {
       assert.ok(tool.title ?? tool.annotations?.title, `${tool.name} has a title`);
       assert.equal(typeof tool.annotations?.readOnlyHint, "boolean", `${tool.name} readOnlyHint`);
@@ -75,8 +75,13 @@ describe("requests sent to Anytype", () => {
     const [req] = anytype.requests;
     assert.equal(req?.method, "POST");
     assert.equal(req?.path, "/v2/spaces/sp%2F1/search");
-    assert.deepEqual(req?.body, { query: "q3", filter: "done = false" });
+    assert.deepEqual(req?.body, { query: "q3", filter: "done = false", fields: ["snippet"] });
     assert.deepEqual(req?.query, { limit: "2" });
+  });
+
+  test("search always asks for snippets, keeping requested fields", async () => {
+    await call("anytype_search", { query: "x", fields: ["status", "snippet"] });
+    assert.deepEqual((anytype.requests[0]?.body as { fields: string[] }).fields, ["snippet", "status"]);
   });
 
   test("search without space_id is global", async () => {
@@ -84,22 +89,39 @@ describe("requests sent to Anytype", () => {
     assert.equal(anytype.requests[0]?.path, "/v2/search");
   });
 
-  test("fetch markdown merges the markdown and properties reads", async () => {
+  test("fetch markdown merges the markdown, properties and backlinks reads", async () => {
     reply = (req) =>
-      req.query.format === "md"
-        ? { body: { markdown: "# Body", type: "page" }, headers: { ETag: '"e7"' } }
-        : { body: { properties: [{ key: "status" }] } };
+      req.method === "POST"
+        ? { body: { data: [{ id: "p1", name: "Linking page", type: "page", properties: {} }], has_more: true } }
+        : req.query.format === "md"
+          ? { body: { markdown: "# Body", type: "page" }, headers: { ETag: '"e7"' } }
+          : { body: { properties: [{ key: "status" }] } };
     const res = await call("anytype_fetch", { space_id: "s", object_id: "o" });
     assert.deepEqual(JSON.parse(res.text), {
       id: "o",
       type: "page",
       etag: '"e7"',
       properties: [{ key: "status" }],
+      backlinks: [{ id: "p1", name: "Linking page", type: "page" }],
+      more_backlinks: true,
       markdown: "# Body",
     });
-    const queries = anytype.requests.map((r) => r.query).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+    const gets = anytype.requests.filter((r) => r.method === "GET");
+    const queries = gets.map((r) => r.query).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
     assert.deepEqual(queries, [{ format: "md" }, { include: "properties" }]);
-    assert.ok(anytype.requests.every((r) => r.path === "/v2/spaces/s/objects/o"));
+    assert.ok(gets.every((r) => r.path === "/v2/spaces/s/objects/o"));
+    const search = anytype.requests.find((r) => r.method === "POST");
+    assert.equal(search?.path, "/v2/spaces/s/search");
+    assert.deepEqual(search?.body, { filter: 'links HAS ALL ("o")' });
+    assert.deepEqual(search?.query, { limit: "20" });
+  });
+
+  test("fetch still succeeds when the backlinks search fails", async () => {
+    reply = (req) =>
+      req.method === "POST" ? { status: 500, body: { message: "boom" } } : { body: { markdown: "x", type: "page" } };
+    const res = await call("anytype_fetch", { space_id: "s", object_id: "o" });
+    assert.equal(res.isError, false);
+    assert.equal(JSON.parse(res.text).backlinks, undefined);
   });
 
   test("fetch outline returns the etag header", async () => {
@@ -271,6 +293,28 @@ describe("output shaping", () => {
     const res = JSON.parse((await call("anytype_fetch", { space_id: "s", object_id: "o" })).text);
     assert.equal(res.truncated, undefined);
     assert.equal(res.has_comments, true);
+  });
+
+  test("fetch_many reads each object once, in order, sharing the character budget", async () => {
+    reply = (req) => {
+      const id = req.path.split("/").pop();
+      if (id === "bad") return { status: 404, body: { code: "not_found", message: "object not found" } };
+      return req.query.format === "md" ? { body: { markdown: `${id}:` + "y".repeat(3000), type: "page" } } : { body: {} };
+    };
+    const res = await call("anytype_fetch_many", { space_id: "s", object_ids: ["a", "bad", "b", "a"], max_chars: 2000 });
+    assert.equal(res.isError, false);
+    const { objects } = JSON.parse(res.text);
+    assert.deepEqual(objects.map((o: { id: string }) => o.id), ["a", "bad", "b"]);
+    assert.equal(objects[0].markdown.length, 666);
+    assert.equal(objects[0].truncated.next_start, 666);
+    assert.match(objects[1].error, /^Anytype API 404: object not found/);
+    assert.equal(anytype.requests.filter((r) => r.method === "GET").length, 6);
+  });
+
+  test("fetch_many refuses more than 10 ids before reaching Anytype", async () => {
+    const res = await call("anytype_fetch_many", { space_id: "s", object_ids: Array.from({ length: 11 }, (_, i) => `o${i}`) });
+    assert.equal(res.isError, true);
+    assert.equal(anytype.requests.length, 0);
   });
 });
 

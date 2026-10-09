@@ -3,6 +3,18 @@
 All notable changes to this project. Versions follow [semantic versioning](https://semver.org); images
 are published as `ghcr.io/hel3an/anytype-mcp-connector:<version>`.
 
+## Unreleased
+
+Fewer round-trips when Claude gathers context from many pages (owner feedback: a long run of
+one-page `fetch` calls in Claude Code).
+
+- `anytype_fetch_many`: up to 10 objects of a space in one call, sharing the character budget; a
+  failing object is reported in its row.
+- Search rows include a short `snippet` of the body, so Claude can skip irrelevant hits.
+- `anytype_fetch` lists `backlinks` (objects linking here, with names).
+- Create/edit descriptions explain real object links: `<mention object_id="…">Name</mention>`
+  (a markdown `[text](anytype://…)` link stays a plain URL and creates no backlink).
+
 ## 0.4.0 — 2026-10-08
 
 Security hardening after an external-style review and a scan of the whole toolchain.

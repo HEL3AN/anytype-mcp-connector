@@ -32,7 +32,7 @@ Claude ──HTTPS──▶ reverse proxy (Caddy or host nginx, TLS) ──▶ c
 | `src/index.ts` | Entry point: loads `.env*`, `loadConfig()`, `createApp()`, listen, graceful shutdown |
 | `src/app.ts` | `createApp(config, {api?, cimdResolver?, log?})`: host validation, request log, `/`, icons, `/healthz`, `/readyz`, OAuth routes, `/mcp` |
 | `src/config.ts` | `loadConfig(env)` — pure, validated; `loadEnvFiles()` |
-| `src/tools.ts` | All 23 MCP tools (Anytype API v2): search/fetch/edit, collections & queries, comments & chats, templates, members. Compact JSON output, `next_offset`, markdown paging. Tool annotations are required for the directory |
+| `src/tools.ts` | All 24 MCP tools (Anytype API v2): search/fetch/edit, collections & queries, comments & chats, templates, members. Compact JSON output, `next_offset`, markdown paging. Tool annotations are required for the directory |
 | `src/hints.ts` | Turns Anytype errors/warnings (`issues[].hint` + `see_also` operationIds) into text with the next **tool** call |
 | `src/anytype/client.ts` | Thin fetch client for the Anytype JSON API v2 (ETag, error passthrough) |
 | `src/auth/oauth-server.ts` | Own OAuth 2.1 authorization server: CIMD (preferred) + DCR (compat), PKCE S256, RFC 9207 `iss`, RFC 8707 resource binding, rotating refresh tokens, bearer middleware, metadata |
@@ -86,6 +86,10 @@ writes there and refuses any other space. Never point tests at real spaces.
   `chat_id`; objects expose it as `discussion`. Collections vs queries: the wrong endpoint answers 400
   with a `see_also` to the right one (`anytype_list_items` falls back automatically).
 - Full-text search lags object creation by a few seconds (indexing is async): poll, don't assume.
+- Object links: only `<mention object_id="…">Name</mention>` in written markdown makes a real link
+  (`links`/`backlinks`); `[text](anytype://object?objectId=…)` is stored as a plain URL mark, though
+  reads render both that way. `backlinks`/`links`/`snippet` come only via search `fields` (not on
+  `GET object`); `links HAS ALL ("<id>")` finds the objects linking to one. Collections link to their items.
 - Ids are untrusted input from the model: URL parsers resolve `.`/`..` as dot segments, so `seg()`
   refuses them (an object call must never reach another route).
 - anytype-cli v0.4.0 (heart v0.51.3) is current as of 2026-10; heart 0.51.4/0.51.5 (chat status,

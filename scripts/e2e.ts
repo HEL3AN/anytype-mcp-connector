@@ -144,6 +144,29 @@ try {
     assert.ok(Array.isArray(rows.data), "query rows (via the query endpoint fallback)");
   });
 
+  await step("mention links show up as backlinks; fetch_many reads both", async () => {
+    const linker = await call("anytype_create_object", {
+      space_id,
+      type: "page",
+      name: `[connector e2e] linker ${marker}`,
+      markdown: `See <mention object_id="${object_id}">the e2e page</mention>.`,
+    });
+    const linker_id = linker?.id ?? linker?.object?.id;
+    assert.ok(linker_id, "linker created");
+    extraIds.push(linker_id);
+    let backlinks: { id: string; name: string }[] = [];
+    for (let i = 0; i < 30 && !backlinks.some((b) => b.id === linker_id); i++) {
+      backlinks = (await call("anytype_fetch", { space_id, object_id })).backlinks ?? [];
+      if (!backlinks.some((b) => b.id === linker_id)) await new Promise((r) => setTimeout(r, 1000));
+    }
+    const back = backlinks.find((b) => b.id === linker_id);
+    assert.ok(back, `linker among backlinks (${backlinks.length})`); // the collection links here too
+    assert.match(back.name, /linker/);
+    const many = await call("anytype_fetch_many", { space_id, object_ids: [object_id, linker_id], max_chars: 4000 });
+    assert.deepEqual(many.objects.map((o: { id: string }) => o.id), [object_id, linker_id]);
+    assert.match(many.objects[1].markdown, new RegExp(`anytype://object\\?objectId=${object_id}`));
+  });
+
   await step("helpers: schema, templates, members, chats", async () => {
     const grammar = await call("anytype_get_schema", { kind: "filters" });
     assert.ok(grammar, "filter grammar");
@@ -166,7 +189,9 @@ try {
     let found = false;
     for (let i = 0; i < 30 && !found; i++) {
       const res = await call("anytype_search", { space_id, query: marker, limit: 5 });
-      found = res.data.some((o: { id: string }) => o.id === object_id);
+      const row = res.data.find((o: { id: string }) => o.id === object_id);
+      found = Boolean(row);
+      if (row) assert.match(row.properties?.snippet ?? "", new RegExp(marker), "rows carry a snippet");
       if (!found) await new Promise((r) => setTimeout(r, 1000)); // full-text indexing is asynchronous (seconds)
     }
     assert.ok(found, "object appears in search results");

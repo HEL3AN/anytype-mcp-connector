@@ -48,7 +48,7 @@ desktop apps), this one is a **remote** connector, so it also works in the Claud
 
 | Area | Tools |
 |---|---|
-| Find & read | `anytype_list_spaces`, `anytype_search` (full text, type, compact filters like `done = false AND due_date < currentWeek()`), `anytype_fetch` (markdown, outline or blocks; pages long bodies) |
+| Find & read | `anytype_list_spaces`, `anytype_search` (full text, type, compact filters like `done = false AND due_date < currentWeek()`), `anytype_fetch` (markdown, outline or blocks; pages long bodies; lists backlinks), `anytype_fetch_many` (up to 10 objects in one call); search rows carry a snippet |
 | Edit | `anytype_create_object` (markdown body), `anytype_edit_object` (atomic ops: replace text, insert markdown, set properties, …, with `dry_run` and ETag checks), `anytype_delete_object` |
 | Collections & sets | `anytype_list_items`, `anytype_list_views`, `anytype_create_collection`, `anytype_create_query` |
 | Comments & chats | `anytype_list_comments`, `anytype_add_comment`, `anytype_list_chats`, `anytype_read_chat`, `anytype_send_chat_message` |

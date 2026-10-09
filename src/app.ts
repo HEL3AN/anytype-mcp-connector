@@ -42,7 +42,8 @@ export function createApp(config: Config, options: AppOptions = {}) {
       {
         instructions:
           "Tools for the user's Anytype workspace (a local-first, end-to-end encrypted knowledge base). " +
-          "Start with anytype_search or anytype_list_spaces, read with anytype_fetch, " +
+          "Start with anytype_search or anytype_list_spaces, read with anytype_fetch " +
+          "(several objects at once: anytype_fetch_many — fewer calls when gathering context), " +
           "edit with anytype_edit_object (prefer replace_text / insert_blocks with markdown). " +
           "Collections and queries (sets) list their items with anytype_list_items; " +
           "comments on an object: anytype_list_comments / anytype_add_comment. " +
