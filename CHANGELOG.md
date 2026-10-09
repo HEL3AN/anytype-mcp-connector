@@ -3,7 +3,7 @@
 All notable changes to this project. Versions follow [semantic versioning](https://semver.org); images
 are published as `ghcr.io/hel3an/anytype-mcp-connector:<version>`.
 
-## Unreleased
+## 0.7.0 — 2026-10-09
 
 - Interactive card (MCP App): `anytype_show_objects` shows a list of objects in the chat with name,
   type, due date, status and tags; tasks get a checkbox that marks them done (not in read-only
