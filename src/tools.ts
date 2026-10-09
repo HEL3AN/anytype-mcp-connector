@@ -164,7 +164,7 @@ async function buildObjectsView(api: AnytypeClient, space_id: string, objectIds:
     valid.length
       ? api.post<{ data?: Row[] }>(
           `${base}/search`,
-          { filter: `id IN (${valid.map((id) => `"${id}"`).join(", ")})`, fields: ["done", "due_date", "status", "tag"] },
+          { filter: `id IN (${valid.map((id) => `"${id}"`).join(", ")})`, fields: ["done", "due_date", "status", "tag", "resolved_layout"] },
           { limit: valid.length },
         )
       : Promise.resolve({ data: { data: [] as Row[] } }),
@@ -188,7 +188,8 @@ async function buildObjectsView(api: AnytypeClient, space_id: string, objectIds:
       id,
       name: r.name || "Untitled",
       ...(r.type ? { type: typeNames.get(r.type) ?? r.type } : {}),
-      ...(typeof p.done === "boolean" ? { done: p.done } : {}),
+      // Tasks (todo layout) always get a checkbox: "done" is empty until it was first set.
+      ...(typeof p.done === "boolean" || p.resolved_layout === "todo" ? { done: p.done === true } : {}),
       ...(due ? { due } : {}),
       ...(optionText(p.status) ? { status: optionText(p.status) } : {}),
       ...(tags?.length ? { tags } : {}),
@@ -1120,7 +1121,7 @@ Show it in a page with markdown ![caption](<file id>) (anytype_edit_object inser
   server.registerTool(
     "anytype_show_objects",
     {
-      title: "Show objects to the user",
+      title: "Show objects",
       description: `Show objects to the user as an interactive card in the chat: name, type, due date, status and tags, a checkbox to mark tasks done, and a tap opens the object in Anytype.
 Use it when the user wants to see or review a set of objects ("show my tasks for this week"), after finding them with anytype_search; at most ${MAX_SHOWN}, in the order given. Don't use it just to read content (anytype_fetch / anytype_fetch_many). Clients without interactive cards show the same list as text.`,
       inputSchema: z.object({
@@ -1128,7 +1129,8 @@ Use it when the user wants to see or review a set of objects ("show my tasks for
         object_ids: z.array(z.string().min(1)).min(1).max(MAX_SHOWN).describe("Objects to show, in display order"),
         title: z.string().max(200).optional().describe('Card heading, e.g. "Tasks due this week"'),
       }),
-      annotations: READ_ONLY,
+      // Hosts show the title (some read it from the annotations) in the card's header.
+      annotations: { ...READ_ONLY, title: "Show objects" },
       _meta: objectsViewToolMeta,
     },
     ({ space_id, object_ids, title }) =>

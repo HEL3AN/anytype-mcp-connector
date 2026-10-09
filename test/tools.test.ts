@@ -1,5 +1,9 @@
 // MCP tools end to end through the real MCP stack (createApp, auth disabled) against a fake Anytype API.
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { after, before, beforeEach, describe, test } from "node:test";
 import type { Client } from "@modelcontextprotocol/client";
 import { createApp } from "../src/app.js";
@@ -465,6 +469,7 @@ describe("interactive card (MCP App)", () => {
             data: [
               { id: "b", name: "Write report", type: "task", properties: { done: false, due_date: "2026-10-12T00:00:00Z", tag: ["Work"], status: "In progress" } },
               { id: "a", name: "Notes", type: "page", properties: {} },
+              { id: "c", name: "Fresh task", type: "task", properties: { done: null, resolved_layout: "todo" } },
             ],
           },
         };
@@ -473,12 +478,12 @@ describe("interactive card (MCP App)", () => {
     };
     const { tools } = await client.listTools();
     const tool = tools.find((t) => t.name === "anytype_show_objects");
-    assert.deepEqual(tool?._meta?.ui, { resourceUri: "ui://anytype/objects-v1.html" });
+    assert.deepEqual(tool?._meta?.ui, { resourceUri: "ui://anytype/objects-v2.html" });
     assert.equal(tool?.annotations?.readOnlyHint, true);
 
-    const res = await client.callTool({ name: "anytype_show_objects", arguments: { space_id: "s", object_ids: ["a", "b", "zz"], title: "Week" } });
+    const res = await client.callTool({ name: "anytype_show_objects", arguments: { space_id: "s", object_ids: ["a", "b", "c", "zz"], title: "Week" } });
     const search = anytype.requests.find((r) => r.method === "POST");
-    assert.deepEqual(search?.body, { filter: 'id IN ("a", "b", "zz")', fields: ["done", "due_date", "status", "tag"] });
+    assert.deepEqual(search?.body, { filter: 'id IN ("a", "b", "c", "zz")', fields: ["done", "due_date", "status", "tag", "resolved_layout"] });
     assert.deepEqual(res.structuredContent, {
       title: "Week",
       space_id: "s",
@@ -495,6 +500,7 @@ describe("interactive card (MCP App)", () => {
           tags: ["Work"],
           link: "anytype://object?objectId=b&spaceId=space.full",
         },
+        { id: "c", name: "Fresh task", type: "Task", done: false, link: "anytype://object?objectId=c&spaceId=space.full" },
       ],
       missing: ["zz"],
     });
@@ -503,14 +509,30 @@ describe("interactive card (MCP App)", () => {
 
   test("the card resource is an MCP App page with the client inlined (no CDN)", async () => {
     const { resources } = await client.listResources();
-    assert.ok(resources.some((r) => r.uri === "ui://anytype/objects-v1.html"));
-    const res = await client.readResource({ uri: "ui://anytype/objects-v1.html" });
+    assert.ok(resources.some((r) => r.uri === "ui://anytype/objects-v2.html"));
+    const res = await client.readResource({ uri: "ui://anytype/objects-v2.html" });
     const [content] = res.contents as { mimeType: string; text: string; _meta?: { ui?: { csp?: unknown } } }[];
     assert.equal(content?.mimeType, "text/html;profile=mcp-app");
-    assert.match(content!.text, /const __ext=\{/);
+    assert.match(content!.text, /const __ext=\(\(\)=>\{/);
     assert.match(content!.text, /"App":/);
     assert.doesNotMatch(content!.text, /unpkg|jsdelivr|<script[^>]+src=/);
     assert.ok(content!.text.length < 600_000);
+  });
+
+  test("the card's module script parses (bundle and page code don't clash)", async () => {
+    const res = await client.readResource({ uri: "ui://anytype/objects-v2.html" });
+    const html = (res.contents[0] as { text: string }).text;
+    const script = /<script type="module">([\s\S]*)<\/script>/.exec(html)?.[1];
+    assert.ok(script, "module script");
+    const dir = mkdtempSync(path.join(tmpdir(), "card-"));
+    try {
+      const file = path.join(dir, "card.mjs");
+      writeFileSync(file, script);
+      const check = spawnSync(process.execPath, ["--check", file], { encoding: "utf8" });
+      assert.equal(check.status, 0, check.stderr);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

@@ -3,6 +3,15 @@
 All notable changes to this project. Versions follow [semantic versioning](https://semver.org); images
 are published as `ghcr.io/hel3an/anytype-mcp-connector:<version>`.
 
+## 0.7.1 — 2026-10-09
+
+- Card fixes from the first real use: tasks always get a checkbox (their `done` is empty until first
+  set), and the page script no longer shares a scope with the minified MCP Apps client (a name clash
+  could leave the card blank; a test now parses the script).
+- Card redesign: compact rows, a calendar icon with a localized date, status as a pill, the type only
+  when types are mixed, the first 6 rows with "Show N more", English and Russian labels.
+- The tool's display title is "Show objects".
+
 ## 0.7.0 — 2026-10-09
 
 - Interactive card (MCP App): `anytype_show_objects` shows a list of objects in the chat with name,
