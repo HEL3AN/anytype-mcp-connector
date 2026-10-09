@@ -8,7 +8,7 @@ const user = (text: string) => ({ messages: [{ role: "user" as const, content: {
 
 const inSpace = (space?: string) => (space ? ` in the space "${space}"` : " across my spaces");
 
-export function registerPrompts(server: McpServer) {
+export function registerPrompts(server: McpServer, { readOnly = false } = {}) {
   server.registerPrompt(
     "weekly_review",
     {
@@ -31,7 +31,7 @@ Then write a short review: what moved forward, what is still open, deadlines in 
     },
   );
 
-  server.registerPrompt(
+  if (!readOnly) server.registerPrompt(
     "meeting_to_tasks",
     {
       title: "Meeting notes → tasks",

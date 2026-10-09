@@ -59,7 +59,7 @@ async function authorize(clientId: string, redirectUri: string, challenge: strin
     code_challenge: challenge,
     code_challenge_method: "S256",
     state,
-    scope: "anytype",
+    scope: (prm.scopes_supported ?? ["anytype"]).join(" "),
     resource: prm.resource,
     ...extra,
   })) url.searchParams.set(k, v);
@@ -69,8 +69,8 @@ async function authorize(clientId: string, redirectUri: string, challenge: strin
   return { page, html, requestId, state };
 }
 
-async function approve(requestId: string, pw = password) {
-  const res = await fetch(`${base}/oauth/consent`, form({ request_id: requestId, password: pw, action: "approve" }));
+async function approve(requestId: string, pw = password, access = "write") {
+  const res = await fetch(`${base}/oauth/consent`, form({ request_id: requestId, password: pw, action: "approve", access }));
   return { res, location: new URL(res.headers.get("location") ?? "about:blank") };
 }
 
@@ -106,6 +106,24 @@ async function mcpCall(accessToken: string, mode: "auto" | "legacy") {
 
   const refreshed = await fetch(as.token_endpoint, form({ grant_type: "refresh_token", client_id: CLAUDE_CODE_CIMD, refresh_token: tokens.refresh_token }));
   check("CIMD: refresh works", refreshed.status === 200, await refreshed.text());
+}
+
+// --- read-only connection: the owner picks "Read only" on the consent page --------------------
+{
+  const { verifier, challenge } = pkce();
+  const auth = await authorize(CLAUDE_CODE_CIMD, LOOPBACK_REDIRECT, challenge);
+  check("consent offers read-only access", auth.html.includes('value="read"'));
+  const { location } = await approve(auth.requestId!, password, "read");
+  const tok = await fetch(as.token_endpoint, form({ grant_type: "authorization_code", client_id: CLAUDE_CODE_CIMD, code: location.searchParams.get("code")!, code_verifier: verifier, redirect_uri: LOOPBACK_REDIRECT, resource: prm.resource }));
+  const tokens = await tok.json();
+  check("read-only: token carries only the read scope", tokens.scope === "anytype:read", tokens.scope);
+  const client = new Client({ name: "oauth-e2e", version: "0.0.0" });
+  await client.connect(
+    new StreamableHTTPClientTransport(new URL(prm.resource), { requestInit: { headers: { Authorization: `Bearer ${tokens.access_token}` } } }),
+  );
+  const { tools } = await client.listTools();
+  await client.close();
+  check("read-only: only read-only tools are listed", tools.length > 0 && tools.every((t) => t.annotations?.readOnlyHint === true), tools.filter((t) => !t.annotations?.readOnlyHint).map((t) => t.name));
 }
 
 {

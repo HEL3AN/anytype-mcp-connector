@@ -38,6 +38,7 @@ Claude ──HTTPS──▶ reverse proxy (Caddy or host nginx, TLS) ──▶ c
 | `src/anytype/client.ts` | Thin fetch client for the Anytype JSON API v2 (ETag, error passthrough) |
 | `src/auth/oauth-server.ts` | Own OAuth 2.1 authorization server: CIMD (preferred) + DCR (compat), PKCE S256, RFC 9207 `iss`, RFC 8707 resource binding, rotating refresh tokens, bearer middleware, metadata |
 | `src/auth/cimd.ts` | Client ID Metadata Document resolver: https-only, no redirects, public-IP check, size/time limits, cache, trust policy `CIMD_TRUSTED_HOSTS` (default `claude.ai,claude.com`) |
+| `src/auth/scopes.ts` | `anytype:read` / `anytype:write` (legacy `anytype` = both); read-only connections get an MCP server with the write tools disabled |
 | `src/auth/store.ts`, `login-page.ts` | JSON-file OAuth state (DCR clients, refresh tokens, signing key) and consent/error pages |
 | `src/landing-page.ts`, `public/` | Home page + icons (favicon.ico, icon.svg, icon-128.png) |
 | `deploy/` | `docker-compose.yml`, `compose.proxy.yml` (blocked networks), `compose.offline.yml` (backup checks), `setup.sh`, `update.sh`, `backup.sh`, `restore.sh`, nginx template |
@@ -129,6 +130,10 @@ writes there and refuses any other space. Never point tests at real spaces.
 - `oauth-e2e` against a deployment shares your IP with the owner's browser; the consent limiter counts only
   failures, but don't loop it.
 - Claude caches discovery metadata ~5 min.
+- Access levels: the owner narrows a connection to read-only on the consent page; `createApp`'s server
+  factory gets `authInfo` per request and `registerTools(…, { readOnly })` disables every tool without
+  `readOnlyHint` (calls fail with "Tool … disabled"). New tools must keep annotations accurate — they decide
+  what a read-only connection can do. Listings are `cacheScope: private` for that reason.
 - If a Claude surface can't connect after the CIMD switch, look for `CIMD client rejected: <url> — <reason>`
   in the connector log; a new metadata host may need adding to `CIMD_TRUSTED_HOSTS`.
 - **Connector icons come from Google's favicon service** (Claude docs, "Network requirements"), not from

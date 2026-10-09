@@ -3,6 +3,14 @@
 All notable changes to this project. Versions follow [semantic versioning](https://semver.org); images
 are published as `ghcr.io/hel3an/anytype-mcp-connector:<version>`.
 
+## Unreleased
+
+- Read-only connections: the consent page offers *Read and edit* or *Read only*. OAuth scopes are now
+  `anytype:read` and `anytype:write`; a read-only connection lists and runs only read-only tools and
+  prompts, and refreshing can't widen it. Existing connections (scope `anytype`) keep full access.
+- Tool and prompt listings are cached per client only (`cacheScope: private`), since they depend on
+  the connection's access level.
+
 ## 0.5.0 — 2026-10-09
 
 Fewer round-trips when Claude gathers context from many pages (owner feedback: a long run of

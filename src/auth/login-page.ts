@@ -26,6 +26,11 @@ function layout(title: string, body: string) {
   .badge { display:inline-block; font-size:12px; padding:1px 8px; border-radius:999px; border:1px solid var(--border); color:var(--muted); margin-left:4px; }
   .warn { background:var(--warn-bg); color:var(--warn); border-radius:10px; padding:10px 12px; font-size:14px; }
   label { display:block; font-size:14px; margin-bottom:6px; }
+  fieldset { border:0; padding:0; margin:0 0 16px; }
+  legend { font-size:14px; margin-bottom:6px; padding:0; }
+  .choice { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border:1px solid var(--border); border-radius:10px; margin-bottom:8px; cursor:pointer; }
+  .choice input { margin-top:4px; }
+  .choice span { color:var(--muted); font-size:14px; }
   input[type=password] { width:100%; padding:12px; font-size:16px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--text); }
   .error { color:var(--error); font-size:14px; margin:8px 0 0; }
   .actions { display:flex; gap:12px; margin-top:20px; }
@@ -50,6 +55,10 @@ export function renderLoginPage(view: {
   redirectHost: string;
   /** All redirect URIs are on this machine: any local program could claim to be the client. */
   localhostOnly: boolean;
+  /** The client asked for write access: the owner can grant it or narrow the connection to read-only. */
+  canWrite: boolean;
+  /** Keep the owner's read-only choice when the page is shown again (wrong password). */
+  readOnlyChosen?: boolean;
   error?: string;
 }) {
   const client = escapeHtml(view.clientName);
@@ -61,11 +70,12 @@ export function renderLoginPage(view: {
   return layout(
     "Connect Anytype",
     `  <h1>Connect to your Anytype</h1>
-  <p><strong>${client}</strong>${badge} wants to read and edit objects in your Anytype spaces. After you approve, you will be sent back to <strong>${host}</strong>.</p>
+  <p><strong>${client}</strong>${badge} wants to ${view.canWrite ? "read and edit" : "read"} objects in your Anytype spaces. After you approve, you will be sent back to <strong>${host}</strong>.</p>
   ${warning}
   <p>Only approve if you started this connection yourself.</p>
   <form method="post" action="/oauth/consent">
     <input type="hidden" name="request_id" value="${escapeHtml(view.requestId)}">
+    ${view.canWrite ? accessChoice(Boolean(view.readOnlyChosen)) : '<input type="hidden" name="access" value="read">'}
     <label for="password">Owner password</label>
     <input id="password" type="password" name="password" autocomplete="current-password" autofocus>
     ${view.error ? `<p class="error" role="alert">${escapeHtml(view.error)}</p>` : ""}
@@ -75,6 +85,14 @@ export function renderLoginPage(view: {
     </div>
   </form>`,
   );
+}
+
+function accessChoice(readOnly: boolean) {
+  return `<fieldset>
+      <legend>Access</legend>
+      <label class="choice"><input type="radio" name="access" value="write"${readOnly ? "" : " checked"}><div>Read and edit<br><span>Search, read, create and change objects, comments and chats</span></div></label>
+      <label class="choice"><input type="radio" name="access" value="read"${readOnly ? " checked" : ""}><div>Read only<br><span>Search and read; Claude can't change anything</span></div></label>
+    </fieldset>`;
 }
 
 /** Shown when the request can't be redirected back safely (unknown client, bad redirect_uri, expired). */

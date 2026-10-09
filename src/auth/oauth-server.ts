@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import express, { type Request, type RequestHandler, type Response } from "express";
 import { rateLimit } from "express-rate-limit";
 import { CimdError, CimdResolver, isCimdClientId } from "./cimd.js";
+import { canWrite, normalizeScopes, READ_SCOPE } from "./scopes.js";
 import { renderErrorPage, renderLoginPage } from "./login-page.js";
 import { AuthStore, type RegisteredClient } from "./store.js";
 
@@ -270,7 +271,7 @@ export class OAuthServer {
     if (payload.fam && this.store.isFamilyRevoked(payload.fam)) throw new Error("Access token was revoked");
     if (normResource(payload.aud) !== normResource(this.opts.resource.href)) throw new Error("Token was not issued for this resource");
     if (!isCimdClientId(payload.cid) && !this.store.getClient(payload.cid)) throw new Error("Client no longer registered");
-    return { token, clientId: payload.cid, scopes: payload.scp, expiresAt: payload.exp, resource: new URL(payload.aud) };
+    return { token, clientId: payload.cid, scopes: normalizeScopes(payload.scp), expiresAt: payload.exp, resource: new URL(payload.aud) };
   }
 
   // --- /authorize -------------------------------------------------------------------------
@@ -305,8 +306,7 @@ export class OAuthServer {
     if (normResource(resource) !== normResource(this.opts.resource.href)) {
       return fail("invalid_target", "resource must be this server's MCP endpoint");
     }
-    const requested = (str("scope") ?? "").split(" ").filter(Boolean);
-    const scopes = requested.filter((s) => this.opts.scopes.includes(s));
+    const scopes = normalizeScopes((str("scope") ?? "").split(" ").filter(Boolean)).filter((s) => this.opts.scopes.includes(s));
 
     this.sweep();
     for (const id of this.pending.keys()) {
@@ -314,7 +314,7 @@ export class OAuthServer {
       this.pending.delete(id); // oldest first (insertion order)
     }
     const requestId = randomUUID();
-    this.pending.set(requestId, {
+    const pending = {
       client,
       redirectUri,
       codeChallenge,
@@ -322,13 +322,14 @@ export class OAuthServer {
       scopes: scopes.length ? scopes : this.opts.scopes,
       resource,
       expiresAt: Date.now() + PENDING_TTL_MS,
-    });
-    sendHtml(res, renderLoginPage(this.consentView(requestId, client, redirectUri)));
+    };
+    this.pending.set(requestId, pending);
+    sendHtml(res, renderLoginPage(this.consentView(requestId, client, redirectUri, pending.scopes)));
   }
 
   private async consent(req: Request, res: Response) {
     res.set("Cache-Control", "no-store");
-    const { request_id, password, action } = req.body as Record<string, string | undefined>;
+    const { request_id, password, action, access } = req.body as Record<string, string | undefined>;
     const pending = request_id ? this.pending.get(request_id) : undefined;
     if (!pending || pending.expiresAt < Date.now()) {
       sendHtml(res.status(400), renderErrorPage("This sign-in request has expired. Start again from Claude."));
@@ -341,7 +342,8 @@ export class OAuthServer {
     }
     if (!(await this.checkPassword(password ?? ""))) {
       console.warn("Consent: wrong owner password");
-      sendHtml(res.status(401), renderLoginPage({ ...this.consentView(request_id!, pending.client, pending.redirectUri), error: "Wrong password" }));
+      const view = this.consentView(request_id!, pending.client, pending.redirectUri, pending.scopes);
+      sendHtml(res.status(401), renderLoginPage({ ...view, readOnlyChosen: access === "read", error: "Wrong password" }));
       return;
     }
     this.pending.delete(request_id!);
@@ -350,16 +352,18 @@ export class OAuthServer {
       clientId: pending.client.id,
       codeChallenge: pending.codeChallenge,
       redirectUri: pending.redirectUri,
-      scopes: pending.scopes,
+      // The owner may narrow the request to read-only on the consent page (never widen it).
+      scopes: access === "read" ? pending.scopes.filter((s) => s === READ_SCOPE) : pending.scopes,
       resource: pending.resource,
       expiresAt: Date.now() + CODE_TTL_MS,
     });
     this.redirectWith(res, pending.redirectUri, { code, state: pending.state });
   }
 
-  private consentView(requestId: string, client: Client, redirectUri: string) {
+  private consentView(requestId: string, client: Client, redirectUri: string, scopes: string[]) {
     return {
       requestId,
+      canWrite: canWrite(scopes),
       clientName: client.displayName,
       verified: client.verified,
       redirectHost: new URL(redirectUri).host,
@@ -550,8 +554,10 @@ export class OAuthServer {
     if (body.resource && normResource(body.resource) !== normResource(record.resource)) {
       throw new OAuthError("invalid_target", "resource does not match the original grant");
     }
-    const requested = (body.scope ?? "").split(" ").filter(Boolean);
-    const scopes = requested.length ? requested.filter((s) => record.scopes.includes(s)) : record.scopes;
+    // Grants from before read-only connections carry the legacy scope: normalize before narrowing.
+    const granted = normalizeScopes(record.scopes);
+    const requested = normalizeScopes((body.scope ?? "").split(" ").filter(Boolean)).filter((s) => granted.includes(s));
+    const scopes = requested.length ? requested : granted;
     this.store.rotateRefreshToken(hash);
     return this.issueTokens(client.id, scopes, record.resource, record.family);
   }

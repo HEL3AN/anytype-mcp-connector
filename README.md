@@ -107,6 +107,9 @@ For maximum control, pin `CONNECTOR_IMAGE` to a version you verified instead of 
 - OAuth 2.1 with PKCE, Client ID Metadata Documents (how Claude identifies itself), resource-bound
   tokens and rotating refresh tokens; every new connection is approved on a consent page with the
   owner password.
+- **Read-only connections:** on the consent page, choose *Read only* and that connection gets only the
+  search and read tools (scope `anytype:read`), e.g. for a phone or a shared computer. Connect again to
+  change it.
 - The connector stores no note content and logs no content; see [PRIVACY.md](PRIVACY.md).
 - Claude is told that note bodies, comments and chat messages are data, not instructions; posting to
   chats and comments is marked as reaching other people, and deleting always asks in Claude Code.

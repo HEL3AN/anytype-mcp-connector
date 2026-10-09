@@ -31,7 +31,7 @@ function options(dataDir: string, overrides: Partial<OAuthServerOptions> = {}): 
     resource: new URL(RESOURCE),
     dataDir,
     ownerPassword: PASSWORD,
-    scopes: ["anytype"],
+    scopes: ["anytype:read", "anytype:write"],
     accessTokenTtlSec: 3600,
     refreshTokenTtlSec: 86400,
     allowedRedirectUris: [CLAUDE_REDIRECT, LOOPBACK_REDIRECT],
@@ -157,12 +157,12 @@ describe("authorization with a CIMD client (claude.ai)", () => {
   test("full flow: consent, code with iss and state, tokens, MCP access", async () => {
     const tokens = await login();
     assert.equal(tokens.token_type, "Bearer");
-    assert.equal(tokens.scope, "anytype");
+    assert.equal(tokens.scope, "anytype:read anytype:write");
     const res = await mcp(tokens.access_token);
     assert.equal(res.status, 200);
     const { auth } = (await res.json()) as { auth: { clientId: string; scopes: string[] } };
     assert.equal(auth.clientId, CLAUDE_ID);
-    assert.deepEqual(auth.scopes, ["anytype"]);
+    assert.deepEqual(auth.scopes, ["anytype:read", "anytype:write"]);
   });
 
   test("redirects carry iss and state", async () => {

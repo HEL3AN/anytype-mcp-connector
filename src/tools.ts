@@ -1,4 +1,4 @@
-import type { CallToolResult, McpServer } from "@modelcontextprotocol/server";
+import type { CallToolResult, McpServer, RegisteredTool } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { AnytypeApiError, type AnytypeClient, seg } from "./anytype/client.js";
 import { resolvePublicAddresses } from "./auth/cimd.js";
@@ -256,7 +256,17 @@ const readMessagesSchema = {
   limit: z.number().int().min(1).max(100).optional().describe("Messages per page (default 25, newest page first)"),
 };
 
-export function registerTools(server: McpServer, api: AnytypeClient) {
+export function registerTools(server: McpServer, api: AnytypeClient, { readOnly = false } = {}) {
+  if (readOnly) {
+    // Read-only connection: every tool that changes data is registered disabled (not listed, not callable).
+    const register = server.registerTool.bind(server) as (...args: unknown[]) => RegisteredTool;
+    server.registerTool = ((...args: unknown[]) => {
+      const tool = register(...args);
+      if (!tool.annotations?.readOnlyHint) tool.disable();
+      return tool;
+    }) as typeof server.registerTool;
+  }
+
   // --- spaces, search, reading ------------------------------------------------------------------
 
   server.registerTool(
