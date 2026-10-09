@@ -154,6 +154,9 @@ writes there and refuses any other space. Never point tests at real spaces.
   `ui://…-vN` URI when the HTML changes (hosts cache by URI). Theme: host CSS variables
   (`--color-text-primary`, …), transparent body, `color-scheme: light dark`. Local check: an `AppBridge`
   harness bundled with esbuild + headless Edge screenshot (no Claude needed).
+  The inlined client runs in its own function scope: its minified top-level names (`t`, …) clashed with
+  the page script and blanked the card (a test runs `node --check` on the script). Tasks need a checkbox
+  even when `done` was never set (`resolved_layout: todo`). Claude's card header shows server + tool name.
 - Connectors directory (claude.ai/directory/manage): annotations + title on every tool, OAuth, docs URL,
   privacy policy URL, test account, icon; the "first-party API" acknowledgment means a listing needs
   Anyproto's permission (#8). Escalations: mcp-review@anthropic.com.
