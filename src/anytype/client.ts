@@ -51,11 +51,42 @@ export class AnytypeClient {
     return this.request<T>("DELETE", path, { query });
   }
 
-  async request<T>(method: string, path: string, opts: RequestOptions = {}): Promise<ApiResponse<T>> {
+  /** Raw bytes of a response (file content), refusing bodies larger than `maxBytes`. */
+  async bytes(path: string, query: Query | undefined, maxBytes: number): Promise<{ contentType: string; data: Buffer }> {
+    const res = await fetch(this.url(path, query), {
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+      signal: AbortSignal.timeout(this.timeoutMs),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      let body: unknown = text;
+      try {
+        body = JSON.parse(text);
+      } catch {
+        // keep raw text
+      }
+      throw new AnytypeApiError(res.status, body);
+    }
+    const declared = Number(res.headers.get("content-length") ?? 0);
+    if (declared > maxBytes) {
+      await res.body?.cancel();
+      throw new Error(`file is ${declared} bytes, more than the ${maxBytes} this tool returns`);
+    }
+    const data = Buffer.from(await res.arrayBuffer());
+    if (data.length > maxBytes) throw new Error(`file is ${data.length} bytes, more than the ${maxBytes} this tool returns`);
+    return { contentType: res.headers.get("content-type") ?? "application/octet-stream", data };
+  }
+
+  private url(path: string, query: Query = {}) {
     const url = new URL(this.baseUrl + path);
-    for (const [k, v] of Object.entries(opts.query ?? {})) {
+    for (const [k, v] of Object.entries(query)) {
       if (v !== undefined) url.searchParams.set(k, String(v));
     }
+    return url;
+  }
+
+  async request<T>(method: string, path: string, opts: RequestOptions = {}): Promise<ApiResponse<T>> {
+    const url = this.url(path, opts.query);
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.apiKey}`,

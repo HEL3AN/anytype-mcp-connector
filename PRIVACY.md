@@ -16,7 +16,12 @@ edit, comment, …). For each call the connector:
 3. returns Anytype's answer to Claude.
 
 The content of your notes passes through the connector **in memory only**. The connector does not
-store, cache or log it.
+store, cache or log it. This includes files Claude reads (`anytype_get_file`): images and text files
+are passed to Claude as they are.
+
+When Claude stores a file from a web address (`anytype_upload_file`), the **Anytype client on your
+server downloads it** from that address. The connector allows only public http(s) addresses, so the
+server's internal network can't be reached this way.
 
 ## What is stored on the server
 

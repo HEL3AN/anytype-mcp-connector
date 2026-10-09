@@ -43,6 +43,18 @@ const OP_TOOLS: Record<string, { tool: string; rename?: Record<string, string> }
   list_chats: { tool: "anytype_list_chats" },
   get_chat_messages: { tool: "anytype_read_chat" },
   add_chat_message: { tool: "anytype_send_chat_message" },
+  edit_chat_message: { tool: "anytype_edit_chat_message" },
+  delete_chat_message: { tool: "anytype_delete_chat_message" },
+  toggle_chat_reaction: { tool: "anytype_react_to_message" },
+  create_chat: { tool: "anytype_create_chat" },
+  get_space: { tool: "anytype_get_space" },
+  update_space: { tool: "anytype_update_space" },
+  create_type: { tool: "anytype_create_type" },
+  update_type: { tool: "anytype_update_type" },
+  create_property: { tool: "anytype_create_property" },
+  update_property: { tool: "anytype_update_property" },
+  upload_file: { tool: "anytype_upload_file" },
+  download_file: { tool: "anytype_get_file" },
 };
 
 /** Query values arrive as strings; tools take booleans and numbers. */

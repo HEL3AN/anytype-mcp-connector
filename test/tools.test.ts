@@ -36,7 +36,7 @@ async function call(name: string, args: Record<string, unknown> = {}) {
 describe("tool list", () => {
   test("every tool has a title and read-only/destructive hints (directory requirement)", async () => {
     const { tools } = await client.listTools();
-    assert.equal(tools.length, 24);
+    assert.equal(tools.length, 36);
     for (const tool of tools) {
       assert.ok(tool.title ?? tool.annotations?.title, `${tool.name} has a title`);
       assert.equal(typeof tool.annotations?.readOnlyHint, "boolean", `${tool.name} readOnlyHint`);
@@ -45,15 +45,43 @@ describe("tool list", () => {
     const writers = tools.filter((t) => !t.annotations?.readOnlyHint).map((t) => t.name).sort();
     assert.deepEqual(writers, [
       "anytype_add_comment",
+      "anytype_create_chat",
       "anytype_create_collection",
       "anytype_create_object",
+      "anytype_create_property",
       "anytype_create_query",
+      "anytype_create_type",
+      "anytype_delete_chat_message",
       "anytype_delete_object",
+      "anytype_edit_chat_message",
       "anytype_edit_object",
+      "anytype_react_to_message",
       "anytype_send_chat_message",
+      "anytype_update_property",
+      "anytype_update_space",
+      "anytype_update_type",
+      "anytype_upload_file",
     ]);
     const destructive = tools.filter((t) => t.annotations?.destructiveHint).map((t) => t.name).sort();
-    assert.deepEqual(destructive, ["anytype_delete_object", "anytype_edit_object"]);
+    assert.deepEqual(destructive, [
+      "anytype_delete_chat_message",
+      "anytype_delete_object",
+      "anytype_edit_chat_message",
+      "anytype_edit_object",
+      "anytype_update_property",
+      "anytype_update_space",
+      "anytype_update_type",
+    ]);
+  });
+
+  test("prompts are listed and render a user message", async () => {
+    const { prompts } = await client.listPrompts();
+    assert.deepEqual(prompts.map((p) => p.name).sort(), ["meeting_to_tasks", "topic_brief", "weekly_review"]);
+    const res = await client.getPrompt({ name: "weekly_review", arguments: { space: "Work", days: "14" } });
+    const text = (res.messages[0]?.content as { text: string }).text;
+    assert.match(text, /space "Work"/);
+    assert.match(text, /daysAgo\(14\)/);
+    assert.match(text, /anytype_fetch_many/);
   });
 });
 
@@ -228,7 +256,7 @@ describe("errors", () => {
         "Anytype API 400: set_properties rejected (validation_failed)",
         '- ops[0].set.nonexistent_prop: unknown property key "nonexistent_prop"',
         "  hint: list all with GET /v2/spaces/sp/properties, or create it with POST /v2/spaces/sp/properties",
-        '  next: anytype_list_properties {"space_id":"sp"} | create_property (not available as a tool)',
+        '  next: anytype_list_properties {"space_id":"sp"} | anytype_create_property {"space_id":"sp"}',
         "- ops[1].find: the find text must appear in exactly one block",
         '  next: anytype_fetch | anytype_fetch {"format":"outline"} | retry the same call with create_missing_options: true',
       ].join("\n"),
@@ -315,6 +343,116 @@ describe("output shaping", () => {
     const res = await call("anytype_fetch_many", { space_id: "s", object_ids: Array.from({ length: 11 }, (_, i) => `o${i}`) });
     assert.equal(res.isError, true);
     assert.equal(anytype.requests.length, 0);
+  });
+});
+
+describe("schema, spaces, chats and files", () => {
+  test("create_type maps key, icon and properties, and creates options only when given", async () => {
+    await call("anytype_create_type", {
+      space_id: "s",
+      name: "Meeting",
+      key: "meeting",
+      icon: "📅",
+      properties: [{ name: "Room", format: "text" }, { property: "status" }],
+    });
+    await call("anytype_create_type", { space_id: "s", name: "Mood", properties: [{ name: "Feel", format: "select", options: [{ name: "Calm" }] }] });
+    const [first, second] = anytype.requests;
+    assert.equal(first?.path, "/v2/spaces/s/types");
+    assert.deepEqual(first?.body, {
+      name: "Meeting",
+      api_key: "meeting",
+      icon: { format: "emoji", emoji: "📅" },
+      property_definitions: [{ name: "Room", format: "text" }, { property: "status" }],
+    });
+    assert.deepEqual(first?.query, {});
+    assert.deepEqual(second?.query, { create_missing_options: "true" });
+  });
+
+  test("a property definition needs a name or a key, not both", async () => {
+    const res = await call("anytype_create_type", { space_id: "s", name: "X", properties: [{ name: "A", property: "a" }] });
+    assert.equal(res.isError, true);
+    assert.equal(anytype.requests.length, 0);
+  });
+
+  test("update_type sends flat fields and ops as separate requests", async () => {
+    reply = () => ({ body: { key: "meeting" } });
+    const res = await call("anytype_update_type", {
+      space_id: "s",
+      type: "meeting",
+      name: "Meeting 2",
+      ops: [{ op: "add_property", property: "Room", format: "text" }],
+    });
+    assert.deepEqual(JSON.parse(res.text), { results: [{ key: "meeting" }, { key: "meeting" }] });
+    assert.deepEqual(anytype.requests.map((r) => [r.method, r.path, r.body]), [
+      ["PATCH", "/v2/spaces/s/types/meeting", { name: "Meeting 2" }],
+      ["PATCH", "/v2/spaces/s/types/meeting", { ops: [{ op: "add_property", property: "Room", format: "text" }] }],
+    ]);
+    const empty = await call("anytype_update_type", { space_id: "s", type: "meeting" });
+    assert.equal(empty.isError, true);
+  });
+
+  test("properties: create and rename", async () => {
+    await call("anytype_create_property", { space_id: "s", name: "Mood", format: "select", options: [{ name: "Calm" }] });
+    await call("anytype_update_property", { space_id: "s", key: "mood", name: "Feeling" });
+    assert.deepEqual(anytype.requests.map((r) => [r.method, r.path, r.body]), [
+      ["POST", "/v2/spaces/s/properties", { name: "Mood", format: "select", options: [{ name: "Calm" }] }],
+      ["PATCH", "/v2/spaces/s/properties/mood", { name: "Feeling" }],
+    ]);
+  });
+
+  test("spaces: get and update", async () => {
+    await call("anytype_get_space", { space_id: "s" });
+    await call("anytype_update_space", { space_id: "s", description: "Work notes", dry_run: true });
+    assert.deepEqual(anytype.requests.map((r) => [r.method, r.path, r.body, r.query]), [
+      ["GET", "/v2/spaces/s", undefined, {}],
+      ["PATCH", "/v2/spaces/s", { description: "Work notes" }, { dry_run: "true" }],
+    ]);
+  });
+
+  test("chat messages: edit, react, delete; create a chat", async () => {
+    await call("anytype_edit_chat_message", { space_id: "s", chat_id: "c", message_id: "m", text: "new" });
+    await call("anytype_react_to_message", { space_id: "s", chat_id: "c", message_id: "m", emoji: "👍" });
+    await call("anytype_delete_chat_message", { space_id: "s", chat_id: "c", message_id: "m" });
+    await call("anytype_create_chat", { space_id: "s", name: "Team" });
+    assert.deepEqual(anytype.requests.map((r) => [r.method, r.path, r.body]), [
+      ["PATCH", "/v2/spaces/s/chats/c/messages/m", { text: "new" }],
+      ["POST", "/v2/spaces/s/chats/c/messages/m/reactions", { emoji: "👍" }],
+      ["DELETE", "/v2/spaces/s/chats/c/messages/m", undefined],
+      ["POST", "/v2/spaces/s/chats", { name: "Team" }],
+    ]);
+  });
+
+  test("upload_file passes public URLs and refuses internal ones before reaching Anytype", async () => {
+    for (const url of ["http://127.0.0.1/admin", "http://10.0.0.5/x.png", "http://[::1]/", "https://user:pw@93.184.216.34/x", "ftp://93.184.216.34/x"]) {
+      const res = await call("anytype_upload_file", { space_id: "s", url });
+      assert.equal(res.isError, true, url);
+    }
+    assert.equal(anytype.requests.length, 0);
+    reply = () => ({ status: 201, body: { id: "f1", name: "x.png", mime_type: "image/png", size: 10 } });
+    const ok = await call("anytype_upload_file", { space_id: "s", url: "https://93.184.216.34/x.png", name: "x.png" });
+    assert.equal(ok.isError, false);
+    assert.deepEqual(anytype.requests[0]?.body, { url: "https://93.184.216.34/x.png", name: "x.png" });
+  });
+
+  test("get_file returns images as images, text as text, other formats as metadata", async () => {
+    const files: Record<string, FakeReply> = {
+      img: { headers: { "Content-Type": "image/png" }, body: "PNGDATA" },
+      txt: { headers: { "Content-Type": "text/csv; charset=utf-8" }, body: "a,b" },
+      pdf: { headers: { "Content-Type": "application/pdf" }, body: "%PDF" },
+    };
+    reply = (req) => files[req.path.split("/")[5]!];
+    const img = await client.callTool({ name: "anytype_get_file", arguments: { space_id: "s", file_id: "img" } });
+    const [content] = img.content as { type: string; data: string; mimeType: string }[];
+    assert.equal(content?.type, "image");
+    assert.equal(content?.mimeType, "image/png");
+    assert.equal(Buffer.from(content!.data, "base64").toString(), JSON.stringify("PNGDATA"));
+    assert.deepEqual(anytype.requests[0]?.query, { width: "1024" });
+    assert.equal(anytype.requests[0]?.path, "/v2/spaces/s/files/img/content");
+    const txt = JSON.parse((await call("anytype_get_file", { space_id: "s", file_id: "txt" })).text);
+    assert.equal(txt.text, JSON.stringify("a,b"));
+    const pdf = JSON.parse((await call("anytype_get_file", { space_id: "s", file_id: "pdf" })).text);
+    assert.equal(pdf.mime_type, "application/pdf");
+    assert.equal(pdf.text, undefined);
   });
 });
 

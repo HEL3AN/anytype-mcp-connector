@@ -1,6 +1,7 @@
 import type { CallToolResult, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { AnytypeApiError, type AnytypeClient, seg } from "./anytype/client.js";
+import { resolvePublicAddresses } from "./auth/cimd.js";
 import { formatApiError, formatIssues, type ApiIssue } from "./hints.js";
 
 const EDIT_OPS = [
@@ -20,6 +21,25 @@ const EDIT_OPS = [
   "add_items",
   "remove_items",
 ] as const;
+
+/** Ops of anytype_update_type (the view ops are shared with anytype_edit_object). */
+const TYPE_OPS = ["add_property", "remove_property", "move_property", "insert_view", "update_view", "move_view", "delete_view"] as const;
+
+const PROPERTY_FORMATS = [
+  "text",
+  "number",
+  "select",
+  "multi_select",
+  "date",
+  "files",
+  "checkbox",
+  "url",
+  "email",
+  "phone",
+  "objects",
+] as const;
+
+const LAYOUTS = ["basic", "note", "todo", "profile", "bookmark", "set", "collection"] as const;
 
 /** Markdown returned by anytype_fetch per call unless max_chars says otherwise. */
 const DEFAULT_MAX_CHARS = 40_000;
@@ -90,6 +110,35 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
   return out;
 }
 
+/** Largest file anytype_get_file returns (images are fetched as a resized variant). */
+const MAX_FILE_BYTES = 4 * 1024 * 1024;
+/** Characters of a text file returned by anytype_get_file. */
+const MAX_FILE_CHARS = 100_000;
+
+const isTextType = (mimeType: string) => /^text\/|[/+](json|xml|csv|markdown|yaml|x-yaml|javascript)$/.test(mimeType);
+
+/**
+ * Anytype downloads upload URLs itself, from the server's network: allow only http(s) URLs that resolve
+ * to public addresses, so a prompt can't make it fetch (and store, for Claude to read) internal pages.
+ * Best effort: redirects and DNS changes after this check happen inside Anytype. Deployments using the
+ * proxy overlay send Anytype's traffic through the proxy anyway.
+ */
+async function checkPublicUrl(raw: string): Promise<void> {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error("url is not a valid URL");
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("url must be http(s)");
+  if (url.username || url.password) throw new Error("url must not carry credentials");
+  try {
+    await resolvePublicAddresses(url.hostname.replace(/^\[|\]$/g, ""));
+  } catch (err) {
+    throw new Error(`url refused: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 /** Most backlinks listed per object. */
 const MAX_BACKLINKS = 20;
 
@@ -141,6 +190,10 @@ const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: 
 const ADDITIVE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
 /** Writes other people read (chat messages, comments): open world, so clients treat them with more care. */
 const OUTWARD = { ...ADDITIVE, openWorldHint: true };
+/** Overwrites or removes existing data. */
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
+/** Claude Code: ask on every call, even when the user allowed the other tools. */
+const ALWAYS_ASK = { "anthropic/requiresUserInteraction": true };
 
 /** How to write a real object link: markdown [text](anytype://...) links stay plain URLs (no backlink). */
 const LINK_HINT =
@@ -413,8 +466,8 @@ Each object includes its backlinks. max_chars is the total markdown budget, shar
     "anytype_get_op_schema",
     {
       title: "Get edit operation schema",
-      description: "Get the JSON schema and an example for one anytype_edit_object operation.",
-      inputSchema: z.object({ op: z.enum(EDIT_OPS) }),
+      description: "Get the JSON schema and an example for one anytype_edit_object or anytype_update_type operation.",
+      inputSchema: z.object({ op: z.enum([...EDIT_OPS, ...TYPE_OPS.filter((o) => o.endsWith("_property"))]) }),
       annotations: READ_ONLY,
     },
     ({ op }) => run(async () => ok((await api.get(`/v2/schemas/ops/${seg(op)}`)).data)),
@@ -596,8 +649,7 @@ Get block ids from anytype_fetch with format "outline". Pass if_match (etag from
         "Move an object to the bin. Anytype only allows deleting objects that were created through this connector.",
       inputSchema: z.object({ space_id: spaceId, object_id: objectId, dry_run: dryRun }),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-      // Claude Code: ask on every call, even when the user allowed the other tools.
-      _meta: { "anthropic/requiresUserInteraction": true },
+      _meta: ALWAYS_ASK,
     },
     ({ space_id, object_id, dry_run }) =>
       run(async () =>
@@ -706,5 +758,271 @@ Get block ids from anytype_fetch with format "outline". Pass if_match (etag from
     },
     ({ space_id, chat_id, ...body }) =>
       run(async () => ok((await api.post(`/v2/spaces/${seg(space_id)}/chats/${seg(chat_id)}/messages`, body)).data)),
+  );
+
+  const messageId = z.string().min(1).describe("Message id, from anytype_read_chat or anytype_list_comments");
+  const messagePath = (space_id: string, chat_id: string, message_id: string) =>
+    `/v2/spaces/${seg(space_id)}/chats/${seg(chat_id)}/messages/${seg(message_id)}`;
+
+  server.registerTool(
+    "anytype_edit_chat_message",
+    {
+      title: "Edit chat message",
+      description:
+        "Replace the text of a chat message or comment the connector's account posted (for comments, chat_id comes from anytype_list_comments). Markdown, up to 8000 characters. Other members see the edit.",
+      inputSchema: z.object({ space_id: spaceId, chat_id: chatId, message_id: messageId, text: z.string().min(1).max(8000) }),
+      annotations: { ...DESTRUCTIVE, openWorldHint: true },
+    },
+    ({ space_id, chat_id, message_id, text }) =>
+      run(async () => ok((await api.patch(messagePath(space_id, chat_id, message_id), { text })).data)),
+  );
+
+  server.registerTool(
+    "anytype_delete_chat_message",
+    {
+      title: "Delete chat message",
+      description:
+        "Delete a chat message or comment the connector's account posted (for comments, chat_id comes from anytype_list_comments).",
+      inputSchema: z.object({ space_id: spaceId, chat_id: chatId, message_id: messageId, dry_run: dryRun }),
+      annotations: { ...DESTRUCTIVE, openWorldHint: true },
+      _meta: ALWAYS_ASK,
+    },
+    ({ space_id, chat_id, message_id, dry_run }) =>
+      run(async () => ok((await api.delete(messagePath(space_id, chat_id, message_id), { dry_run })).data)),
+  );
+
+  server.registerTool(
+    "anytype_react_to_message",
+    {
+      title: "React to message",
+      description:
+        "Toggle an emoji reaction on a chat message or comment: adds it, or removes it if the connector's account already reacted with it (the result says which).",
+      inputSchema: z.object({ space_id: spaceId, chat_id: chatId, message_id: messageId, emoji: z.string().min(1).max(32) }),
+      annotations: OUTWARD,
+    },
+    ({ space_id, chat_id, message_id, emoji }) =>
+      run(async () => ok((await api.post(`${messagePath(space_id, chat_id, message_id)}/reactions`, { emoji })).data)),
+  );
+
+  server.registerTool(
+    "anytype_create_chat",
+    {
+      title: "Create chat",
+      description:
+        "Create a new chat in a space, visible to its members. Only when the user asks for one: a chat made through the API can be removed only in the Anytype app.",
+      inputSchema: z.object({ space_id: spaceId, name: z.string().min(1).max(4096), dry_run: dryRun }),
+      annotations: OUTWARD,
+    },
+    ({ space_id, name, dry_run }) =>
+      run(async () => ok((await api.post(`/v2/spaces/${seg(space_id)}/chats`, { name }, { dry_run })).data)),
+  );
+
+  // --- spaces ------------------------------------------------------------------------------------
+
+  server.registerTool(
+    "anytype_get_space",
+    {
+      title: "Get space",
+      description: "Get one space: its name and description (context about what the space is for).",
+      inputSchema: z.object({ space_id: spaceId }),
+      annotations: READ_ONLY,
+    },
+    ({ space_id }) => run(async () => ok((await api.get(`/v2/spaces/${seg(space_id)}`)).data)),
+  );
+
+  server.registerTool(
+    "anytype_update_space",
+    {
+      title: "Update space",
+      description: "Rename a space or change its description. Every member of a shared space sees the change.",
+      inputSchema: z.object({
+        space_id: spaceId,
+        name: z.string().min(1).max(4096).optional(),
+        description: z.string().max(4096).optional(),
+        dry_run: dryRun,
+      }),
+      annotations: DESTRUCTIVE,
+    },
+    ({ space_id, dry_run, ...body }) =>
+      run(async () => ok((await api.patch(`/v2/spaces/${seg(space_id)}`, body, { query: { dry_run } })).data)),
+  );
+
+  // --- schema authoring --------------------------------------------------------------------------
+
+  const optionList = z
+    .array(z.object({ name: z.string().min(1).max(4096), color: z.string().max(64).optional() }))
+    .max(100)
+    .optional()
+    .describe("select/multi_select option names");
+  const propertyDefinition = z
+    .object({
+      name: z.string().min(1).max(128).optional().describe("Display name; an unknown one creates the property"),
+      property: z.string().min(1).max(256).optional().describe("Key of an existing property (instead of name)"),
+      format: z.enum(PROPERTY_FORMATS).optional().describe("Format of a new property (default text)"),
+      options: optionList,
+      section: z.enum(["featured", "hidden"]).optional().describe("featured shows it on the object itself"),
+    })
+    .refine((d) => Boolean(d.name) !== Boolean(d.property), "give name or property, not both");
+  const typeKey = z.string().regex(/^[a-zA-Z0-9_]+$/).max(256);
+  const emojiIcon = z.string().min(1).max(32).optional().describe("Emoji icon");
+  const asIcon = (emoji?: string) => (emoji ? { icon: { format: "emoji", emoji } } : {});
+
+  server.registerTool(
+    "anytype_create_type",
+    {
+      title: "Create object type",
+      description: `Create an object type (e.g. "Meeting") with its properties. Name properties by display name (an unknown name creates a property of the given format) or by an existing key (anytype_list_properties).
+Check anytype_list_types first: reuse a type that already fits instead of creating a near-duplicate.`,
+      inputSchema: z.object({
+        space_id: spaceId,
+        name: z.string().min(1).max(4096).describe("Singular display name"),
+        plural_name: z.string().max(4096).optional(),
+        key: typeKey.optional().describe("Type key (derived from the name when omitted)"),
+        layout: z.enum(LAYOUTS).optional(),
+        icon: emojiIcon,
+        properties: z.array(propertyDefinition).max(128).optional(),
+        dry_run: dryRun,
+      }),
+      annotations: ADDITIVE,
+    },
+    ({ space_id, key, icon, properties, dry_run, ...rest }) =>
+      run(async () => {
+        const body = {
+          ...rest,
+          ...(key ? { api_key: key } : {}),
+          ...asIcon(icon),
+          ...(properties ? { property_definitions: properties } : {}),
+        };
+        const create_missing_options = properties?.some((p) => p.options?.length) || undefined;
+        return ok((await api.post(`/v2/spaces/${seg(space_id)}/types`, body, { dry_run, create_missing_options })).data);
+      }),
+  );
+
+  server.registerTool(
+    "anytype_update_type",
+    {
+      title: "Update object type",
+      description: `Change an object type: name, plural name, layout, icon, default template or default view, and/or its property list and views with ops:
+- {"op":"add_property","property":"Due date","format":"date"} (an unknown name creates the property)
+- {"op":"remove_property","property":"<key>"}, move_property, and the view ops insert_view, update_view, move_view, delete_view
+Call anytype_get_op_schema for an op's exact fields. Objects keep their values when a property is removed from the type.`,
+      inputSchema: z.object({
+        space_id: spaceId,
+        type: z.string().min(1).describe("Type key, e.g. meeting"),
+        name: z.string().min(1).max(4096).optional(),
+        plural_name: z.string().max(4096).optional(),
+        layout: z.enum(LAYOUTS).optional(),
+        icon: emojiIcon,
+        default_template: z.string().max(256).optional().describe('Template id; "" clears it'),
+        default_view: z.enum(["table", "list", "gallery", "kanban", "calendar", "graph"]).optional(),
+        ops: z.array(z.object({ op: z.enum(TYPE_OPS) }).passthrough()).min(1).max(512).optional(),
+        dry_run: dryRun,
+      }),
+      annotations: DESTRUCTIVE,
+    },
+    ({ space_id, type, icon, ops, dry_run, ...rest }) =>
+      run(async () => {
+        const path = `/v2/spaces/${seg(space_id)}/types/${seg(type)}`;
+        const fields = Object.fromEntries(Object.entries({ ...rest, ...asIcon(icon) }).filter(([, v]) => v !== undefined));
+        if (!Object.keys(fields).length && !ops) throw new Error("nothing to change: pass a field or ops");
+        const query = { dry_run, create_missing_options: ops?.some((o) => "options" in o) || undefined };
+        // A request carries either flat fields or an ops envelope.
+        const results: unknown[] = [];
+        if (Object.keys(fields).length) results.push((await api.patch(path, fields, { query })).data);
+        if (ops) results.push((await api.patch(path, { ops }, { query })).data);
+        return ok(results.length === 1 ? results[0] : { results });
+      }),
+  );
+
+  server.registerTool(
+    "anytype_create_property",
+    {
+      title: "Create property",
+      description:
+        "Create a property in a space. To put it on a type use anytype_update_type add_property (or list it in anytype_create_type). Check anytype_list_properties first to avoid duplicates.",
+      inputSchema: z.object({
+        space_id: spaceId,
+        name: z.string().min(1).max(4096),
+        format: z.enum(PROPERTY_FORMATS),
+        key: typeKey.optional().describe("Property key (derived from the name when omitted)"),
+        options: optionList,
+        dry_run: dryRun,
+      }),
+      annotations: ADDITIVE,
+    },
+    ({ space_id, dry_run, ...body }) =>
+      run(async () => ok((await api.post(`/v2/spaces/${seg(space_id)}/properties`, body, { dry_run })).data)),
+  );
+
+  server.registerTool(
+    "anytype_update_property",
+    {
+      title: "Rename property",
+      description: "Rename a property (its key stays the same). Every object and type using it shows the new name.",
+      inputSchema: z.object({
+        space_id: spaceId,
+        key: z.string().min(1).describe("Property key"),
+        name: z.string().min(1).max(4096),
+        dry_run: dryRun,
+      }),
+      annotations: DESTRUCTIVE,
+    },
+    ({ space_id, key, name, dry_run }) =>
+      run(async () =>
+        ok((await api.patch(`/v2/spaces/${seg(space_id)}/properties/${seg(key)}`, { name }, { query: { dry_run } })).data),
+      ),
+  );
+
+  // --- files -------------------------------------------------------------------------------------
+
+  server.registerTool(
+    "anytype_upload_file",
+    {
+      title: "Upload file from URL",
+      description: `Store a file from a public http(s) URL (image, PDF, ...) in a space; Anytype downloads it. Returns the file object's id.
+Show it in a page with markdown ![caption](<file id>) (anytype_edit_object insert_blocks, or a new object's markdown).`,
+      inputSchema: z.object({
+        space_id: spaceId,
+        url: z.string().url().max(4096),
+        name: z.string().max(4096).optional().describe("File name, e.g. chart.png"),
+        dry_run: dryRun,
+      }),
+      annotations: { ...ADDITIVE, openWorldHint: true },
+    },
+    ({ space_id, url, name, dry_run }) =>
+      run(async () => {
+        await checkPublicUrl(url);
+        return ok((await api.post(`/v2/spaces/${seg(space_id)}/files`, { url, ...(name ? { name } : {}) }, { dry_run })).data);
+      }),
+  );
+
+  server.registerTool(
+    "anytype_get_file",
+    {
+      title: "Get file",
+      description: `Read a file stored in Anytype, e.g. an image in a page: ![...](<file id>). Images come back as an image (resized to width, default 1024 px); text files (txt, md, csv, json, ...) as text; other formats only as type and size.${UNTRUSTED}`,
+      inputSchema: z.object({
+        space_id: spaceId,
+        file_id: z.string().min(1).describe("File object id"),
+        width: z.number().int().min(64).max(4096).optional().describe("Image width in pixels (default 1024)"),
+      }),
+      annotations: READ_ONLY,
+    },
+    ({ space_id, file_id, width = 1024 }) =>
+      run(async (): Promise<CallToolResult> => {
+        const path = `/v2/spaces/${seg(space_id)}/files/${seg(file_id)}/content`;
+        // Only images have width variants; other files ignore the parameter.
+        const { contentType, data } = await api.bytes(path, { width }, MAX_FILE_BYTES);
+        const mimeType = contentType.split(";")[0]!.trim().toLowerCase();
+        if (/^image\/(png|jpeg|gif|webp)$/.test(mimeType)) {
+          return { content: [{ type: "image", data: data.toString("base64"), mimeType }] };
+        }
+        if (isTextType(mimeType)) {
+          const all = data.toString("utf8");
+          const body = all.slice(0, MAX_FILE_CHARS);
+          return ok({ id: file_id, mime_type: mimeType, text: body, ...(all.length > body.length ? { truncated: { total_chars: all.length } } : {}) });
+        }
+        return ok({ id: file_id, mime_type: mimeType, size: data.length, note: "This format can't be returned as text or an image." });
+      }),
   );
 }

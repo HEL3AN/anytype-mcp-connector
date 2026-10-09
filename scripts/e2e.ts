@@ -3,6 +3,7 @@
 // editing and deleting a temporary object. Writes happen ONLY in the space named E2E_SPACE
 // (default "API_TEST"); use an API key scoped to that space. Reads .env.local (API_KEY, ANYTYPE_API_URL).
 import assert from "node:assert/strict";
+import { AnytypeClient } from "../src/anytype/client.js";
 import { createApp } from "../src/app.js";
 import { loadConfig, loadEnvFiles } from "../src/config.js";
 import { mcpClient, resultText, serve } from "../test/helpers.js";
@@ -12,6 +13,8 @@ const spaceName = process.env.E2E_SPACE ?? "API_TEST";
 const config = loadConfig({ ...process.env, AUTH_DISABLED: "true", HOST: "127.0.0.1", OWNER_PASSWORD: "" });
 const server = await serve(createApp(config, { log: () => {} }).app);
 const client = await mcpClient(`${server.url}/mcp`);
+// Types and properties have no delete tool (on purpose); the cleanup removes them directly.
+const api = new AnytypeClient(config.anytypeUrl, config.anytypeApiKey);
 
 let failures = 0;
 async function step(name: string, fn: () => Promise<void>) {
@@ -48,6 +51,7 @@ const space_id = space.id;
 const marker = `e2e-${Date.now().toString(36)}`;
 let object_id: string | undefined;
 const extraIds: string[] = [];
+const schemaPaths: string[] = [];
 console.log(`Anytype ${config.anytypeUrl}, space "${spaceName}" (${space_id.slice(-6)}), marker ${marker}`);
 
 try {
@@ -119,16 +123,82 @@ try {
     assert.match(text, /Anytype API 4\d\d/);
   });
 
-  await step("comments: add, reply, list", async () => {
+  await step("comments: add, reply, list, edit, react, delete", async () => {
     const first = await call("anytype_add_comment", { space_id, object_id, text: `Comment **${marker}**` });
     assert.ok(first.chat_id && first.id, "comment posted");
-    await call("anytype_add_comment", { space_id, object_id, text: "Reply", reply_to: first.id });
+    const reply = await call("anytype_add_comment", { space_id, object_id, text: "Reply", reply_to: first.id });
     const md = await call("anytype_fetch", { space_id, object_id });
     assert.equal(md.has_comments, true);
     const list = await call("anytype_list_comments", { space_id, object_id });
     assert.equal(list.messages.length, 2);
     assert.match(list.messages[0].text, new RegExp(marker));
     assert.equal(list.messages[1].reply_to, first.id);
+    const ids = { space_id, chat_id: first.chat_id };
+    await call("anytype_edit_chat_message", { ...ids, message_id: reply.id, text: "Edited reply" });
+    const reacted = await call("anytype_react_to_message", { ...ids, message_id: first.id, emoji: "👍" });
+    assert.equal(reacted.added, true);
+    await call("anytype_delete_chat_message", { ...ids, message_id: reply.id });
+    const after = await call("anytype_list_comments", { space_id, object_id });
+    assert.equal(after.messages.length, 1);
+    assert.deepEqual(after.messages[0].reactions, { "👍": 1 });
+  });
+
+  await step("space: get", async () => {
+    const got = await call("anytype_get_space", { space_id });
+    assert.equal(got.name, spaceName);
+    const dry = await call("anytype_update_space", { space_id, description: "e2e dry run", dry_run: true });
+    assert.ok(dry, "update_space dry run answered");
+  });
+
+  await step("schema: create and update a type and a property", async () => {
+    const prop = await call("anytype_create_property", {
+      space_id,
+      name: `E2E mood ${marker}`,
+      key: `e2e_mood_${marker.replace(/\W/g, "_")}`,
+      format: "select",
+      options: [{ name: "Calm" }],
+    });
+    assert.ok(prop.key, "property key");
+    schemaPaths.push(`/v2/spaces/${space_id}/properties/${prop.key}`);
+    await call("anytype_update_property", { space_id, key: prop.key, name: `E2E feeling ${marker}` });
+    const type = await call("anytype_create_type", {
+      space_id,
+      name: `E2E meeting ${marker}`,
+      key: `e2e_meeting_${marker.replace(/\W/g, "_")}`,
+      icon: "📅",
+      properties: [{ property: prop.key }, { name: `E2E room ${marker}`, format: "text" }],
+    });
+    assert.ok(type.key, "type key");
+    schemaPaths.unshift(`/v2/spaces/${space_id}/types/${type.key}`);
+    for (const created of type.created?.properties ?? []) schemaPaths.push(`/v2/spaces/${space_id}/properties/${created.key}`);
+    await call("anytype_update_type", {
+      space_id,
+      type: type.key,
+      name: `E2E meeting renamed ${marker}`,
+      ops: [{ op: "add_property", property: "description" }],
+    });
+    const got = await call("anytype_get_type", { space_id, type: type.key });
+    assert.match(JSON.stringify(got), /E2E meeting renamed/);
+    assert.match(JSON.stringify(got), /E2E feeling/);
+  });
+
+  await step("files: upload from a URL, embed, read back as an image", async () => {
+    const refused = await callError("anytype_upload_file", { space_id, url: "http://127.0.0.1:31009/v2/spaces" });
+    assert.match(refused, /non-public/);
+    const file = await call("anytype_upload_file", {
+      space_id,
+      url: "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png",
+      name: `e2e-${marker}.png`,
+    });
+    assert.ok(file.id, "file id");
+    extraIds.push(file.id);
+    await call("anytype_edit_object", { space_id, object_id, ops: [{ op: "insert_blocks", markdown: `![logo](${file.id})` }] });
+    const md = await call("anytype_fetch", { space_id, object_id });
+    assert.match(md.markdown, new RegExp(`!\\[logo\\]\\(${file.id}\\)`));
+    const res = await client.callTool({ name: "anytype_get_file", arguments: { space_id, file_id: file.id, width: 256 } });
+    const [content] = res.content as { type: string; mimeType?: string }[];
+    assert.equal(content?.type, "image", resultText(res).slice(0, 200));
+    assert.equal(content?.mimeType, "image/png");
   });
 
   await step("collections and queries: create, list items and views", async () => {
@@ -200,6 +270,11 @@ try {
   for (const id of [...extraIds, ...(object_id ? [object_id] : [])]) {
     await step(`delete ${id.slice(-6)}`, async () => {
       await call("anytype_delete_object", { space_id, object_id: id });
+    });
+  }
+  for (const path of schemaPaths) {
+    await step(`delete ${path.split("/").slice(-2).join("/")}`, async () => {
+      await api.delete(path);
     });
   }
   await client.close();

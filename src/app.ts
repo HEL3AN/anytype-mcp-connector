@@ -9,6 +9,7 @@ import { OAuthServer } from "./auth/oauth-server.js";
 import type { Config } from "./config.js";
 import { renderLandingPage } from "./landing-page.js";
 import { registerTools } from "./tools.js";
+import { registerPrompts } from "./prompts.js";
 
 export interface AppOptions {
   /** Overrides the Anytype client (tests). */
@@ -57,10 +58,12 @@ export function createApp(config: Config, options: AppOptions = {}) {
         cacheHints: {
           "tools/list": { ttlMs: 60 * 60 * 1000, cacheScope: "public" },
           "server/discover": { ttlMs: 60 * 60 * 1000, cacheScope: "public" },
+          "prompts/list": { ttlMs: 60 * 60 * 1000, cacheScope: "public" },
         },
       },
     );
     registerTools(server, api);
+    registerPrompts(server);
     return server;
   }
 

@@ -15,6 +15,16 @@ one-page `fetch` calls in Claude Code).
 - Create/edit descriptions explain real object links: `<mention object_id="…">Name</mention>`
   (a markdown `[text](anytype://…)` link stays a plain URL and creates no backlink).
 
+More of the Anytype API (36 tools):
+
+- Schema: `anytype_create_type`, `anytype_update_type` (fields and property/view ops),
+  `anytype_create_property`, `anytype_update_property`. No deletes, on purpose.
+- Files: `anytype_upload_file` from a public URL (internal addresses are refused),
+  `anytype_get_file` returns images as images and text files as text.
+- Chats and comments: edit, delete (always asks in Claude Code), react, create a chat.
+- Spaces: `anytype_get_space`, `anytype_update_space`.
+- MCP prompts: weekly review, meeting notes → tasks, topic brief.
+
 ## 0.4.0 — 2026-10-08
 
 Security hardening after an external-style review and a scan of the whole toolchain.

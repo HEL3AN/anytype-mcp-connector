@@ -32,7 +32,8 @@ Claude ──HTTPS──▶ reverse proxy (Caddy or host nginx, TLS) ──▶ c
 | `src/index.ts` | Entry point: loads `.env*`, `loadConfig()`, `createApp()`, listen, graceful shutdown |
 | `src/app.ts` | `createApp(config, {api?, cimdResolver?, log?})`: host validation, request log, `/`, icons, `/healthz`, `/readyz`, OAuth routes, `/mcp` |
 | `src/config.ts` | `loadConfig(env)` — pure, validated; `loadEnvFiles()` |
-| `src/tools.ts` | All 24 MCP tools (Anytype API v2): search/fetch/edit, collections & queries, comments & chats, templates, members. Compact JSON output, `next_offset`, markdown paging. Tool annotations are required for the directory |
+| `src/tools.ts` | All 36 MCP tools (Anytype API v2): search/fetch/edit, collections & queries, comments & chats, files, spaces, types & properties, templates, members. Compact JSON output, `next_offset`, markdown paging. Tool annotations are required for the directory |
+| `src/prompts.ts` | MCP prompts (canned workflows: weekly review, meeting notes → tasks, topic brief) |
 | `src/hints.ts` | Turns Anytype errors/warnings (`issues[].hint` + `see_also` operationIds) into text with the next **tool** call |
 | `src/anytype/client.ts` | Thin fetch client for the Anytype JSON API v2 (ETag, error passthrough) |
 | `src/auth/oauth-server.ts` | Own OAuth 2.1 authorization server: CIMD (preferred) + DCR (compat), PKCE S256, RFC 9207 `iss`, RFC 8707 resource binding, rotating refresh tokens, bearer middleware, metadata |
@@ -94,6 +95,13 @@ writes there and refuses any other space. Never point tests at real spaces.
   refuses them (an object call must never reach another route).
 - anytype-cli v0.4.0 (heart v0.51.3) is current as of 2026-10; heart 0.51.4/0.51.5 (chat status,
   markdown in v2 chat text, reconnect after sleep) arrive with the next CLI release — re-run e2e then.
+- Chats created through the API record no creating key, so they can't be deleted through the API
+  (403 `not_created_by_this_key`): e2e never creates chats. Types and properties can be deleted (e2e cleans
+  them up directly); the connector has no delete tool for them, on purpose.
+- Type/property keys are normalized (`e2e_x1` → `e_2_e_x_1`): always use the key the response returns.
+- Files: `POST files {url}` makes Anytype download the URL from the server's network → `checkPublicUrl`
+  (public addresses only). Embed with markdown `![caption](<file id>)`; `GET files/{id}/content?width=`
+  returns a resized image variant. `GET object?format=md` on a file object fails (500).
 - `DELETE` only works for objects created by a **named** API key; `is_archived` is output-only, so
   objects made by an unnamed key can only be removed in the app.
 - Legacy unscoped keys work but every response carries a deprecation notice; scoped keys are v2-only.
