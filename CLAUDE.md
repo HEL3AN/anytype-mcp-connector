@@ -93,6 +93,8 @@ writes there and refuses any other space. Never point tests at real spaces.
   (`links`/`backlinks`); `[text](anytype://object?objectId=…)` is stored as a plain URL mark, though
   reads render both that way. `backlinks`/`links`/`snippet` come only via search `fields` (not on
   `GET object`); `links HAS ALL ("<id>")` finds the objects linking to one. Collections link to their items.
+- Search `fields` are validated: with `type` set they must be properties of that type (400 otherwise, e.g.
+  `snippet` on tasks), across spaces unknown fields only warn. The connector's own `snippet` is retried away.
 - Ids are untrusted input from the model: URL parsers resolve `.`/`..` as dot segments, so `seg()`
   refuses them (an object call must never reach another route).
 - anytype-cli v0.4.0 (heart v0.51.3) is current as of 2026-10; heart 0.51.4/0.51.5 (chat status,
@@ -157,6 +159,8 @@ writes there and refuses any other space. Never point tests at real spaces.
   The inlined client runs in its own function scope: its minified top-level names (`t`, …) clashed with
   the page script and blanked the card (a test runs `node --check` on the script). Tasks need a checkbox
   even when `done` was never set (`resolved_layout: todo`). Claude's card header shows server + tool name.
+  The page CSS needs `[hidden] { display: none !important; }`: display rules otherwise beat the attribute.
+  `npm run seed-demo` fills API_TEST with fictional data for card screenshots (`--clean` removes it).
 - Connectors directory (claude.ai/directory/manage): annotations + title on every tool, OAuth, docs URL,
   privacy policy URL, test account, icon; the "first-party API" acknowledgment means a listing needs
   Anyproto's permission (#8). Escalations: mcp-review@anthropic.com.
