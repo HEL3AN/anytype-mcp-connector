@@ -3,6 +3,12 @@
 All notable changes to this project. Versions follow [semantic versioning](https://semver.org); images
 are published as `ghcr.io/hel3an/anytype-mcp-connector:<version>`.
 
+## 0.7.3 — 2026-10-12
+
+- Card: straight inset dividers between rows (the old ones curved at the rounded row corners).
+- Tool and prompt listings are cacheable for 10 minutes instead of an hour, so a new release reaches
+  Claude without reconnecting.
+
 ## 0.7.2 — 2026-10-09
 
 - Search: spaces without a `snippet` property no longer add a warning to every result (the connector

@@ -23,6 +23,9 @@ export interface AppOptions {
 }
 
 
+/** How long clients may cache tool/prompt listings: short, so a release reaches Claude without reconnecting. */
+const LISTING_TTL_MS = 10 * 60 * 1000;
+
 /** Builds the Express app: landing page, icons, health checks, OAuth and the MCP endpoint. */
 export function createApp(config: Config, options: AppOptions = {}) {
   const log = options.log ?? console.log;
@@ -64,9 +67,9 @@ export function createApp(config: Config, options: AppOptions = {}) {
         // Listings change only with a release or the connection's access level: clients may cache them,
         // shared caches may not (read-only connections see fewer tools).
         cacheHints: {
-          "tools/list": { ttlMs: 60 * 60 * 1000, cacheScope: "private" },
-          "server/discover": { ttlMs: 60 * 60 * 1000, cacheScope: "private" },
-          "prompts/list": { ttlMs: 60 * 60 * 1000, cacheScope: "private" },
+          "tools/list": { ttlMs: LISTING_TTL_MS, cacheScope: "private" },
+          "server/discover": { ttlMs: LISTING_TTL_MS, cacheScope: "private" },
+          "prompts/list": { ttlMs: LISTING_TTL_MS, cacheScope: "private" },
         },
       },
     );

@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
 /** Bump the version when the HTML changes: hosts may cache resources by URI. */
-export const OBJECTS_VIEW_URI = "ui://anytype/objects-v2.html";
+export const OBJECTS_VIEW_URI = "ui://anytype/objects-v3.html";
 export const MCP_APP_MIME_TYPE = "text/html;profile=mcp-app";
 /** Tool `_meta` linking a tool to its UI (current key and the legacy flat key). */
 export const objectsViewToolMeta = { ui: { resourceUri: OBJECTS_VIEW_URI }, "ui/resourceUri": OBJECTS_VIEW_URI };
@@ -83,10 +83,10 @@ export function renderObjectsView(bundle: string): string {
   h2 { margin: 0; font-size: var(--font-text-md-size, 15px); font-weight: var(--font-weight-semibold, 600); }
   .count { color: var(--muted); font-size: var(--sm); }
   ul { list-style: none; margin: 0; padding: 0; }
-  li { display: flex; gap: 10px; align-items: flex-start; padding: 7px 8px; border-radius: var(--radius); }
+  li { position: relative; display: flex; gap: 10px; align-items: flex-start; padding: 7px 8px; border-radius: var(--radius); }
   li:hover { background: var(--hover); }
-  li + li { box-shadow: 0 -1px 0 var(--line); }
-  li:hover, li:hover + li { box-shadow: none; }
+  li + li::before { content: ""; position: absolute; top: 0; left: 8px; right: 8px; border-top: 1px solid var(--line); }
+  li:hover::before, li:hover + li::before { border-top-color: transparent; }
   .check { appearance: none; flex: none; width: 18px; height: 18px; margin: 1px 0 0; border: 1.5px solid var(--muted);
            border-radius: 5px; display: grid; place-items: center; cursor: pointer; background: transparent; }
   .check::after { content: ""; width: 9px; height: 5px; border: solid var(--color-text-inverse, Canvas); border-width: 0 0 2px 2px;
