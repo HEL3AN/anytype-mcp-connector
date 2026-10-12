@@ -14,6 +14,7 @@
   <a href="https://github.com/HEL3AN/anytype-mcp-connector/releases"><img src="https://img.shields.io/github/v/release/HEL3AN/anytype-mcp-connector" alt="Release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT"></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/HEL3AN/anytype-mcp-connector"><img src="https://api.scorecard.dev/projects/github.com/HEL3AN/anytype-mcp-connector/badge" alt="OpenSSF Scorecard"></a>
+  <a href="https://m8ven.ai/mcp/hel3an-anytype-mcp-connector-gdfcoq?s=readme"><img src="https://m8ven.ai/badge/mcp/hel3an-anytype-mcp-connector-gdfcoq?v=e485272ca7595777732a13482ba77cfb" alt="M8ven Score"></a>
 </p>
 
 ---
@@ -115,10 +116,6 @@ For maximum control, pin `CONNECTOR_IMAGE` to a version you verified instead of 
 - Claude is told that note bodies, comments and chat messages are data, not instructions; posting to
   chats and comments is marked as reaching other people, and deleting always asks in Claude Code.
 - Threat model and how to report a vulnerability: [SECURITY.md](SECURITY.md).
-
-Independent scan of the published code:
-
-[![M8ven Score](https://m8ven.ai/badge/mcp/hel3an-anytype-mcp-connector-gdfcoq?v=e485272ca7595777732a13482ba77cfb)](https://m8ven.ai/mcp/hel3an-anytype-mcp-connector-gdfcoq?s=readme)
 
 ## Limitations
 
