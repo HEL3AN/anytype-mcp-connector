@@ -185,6 +185,9 @@ docker compose exec anytype anytype auth apikey list
 
 - `GET /healthz` — the connector process is up (returns its version)
 - `GET /readyz` — Anytype is reachable and the API key works
+- The connector image is distroless: it has `node` but no shell, so `docker compose exec connector sh`
+  doesn't work. Run Node one-liners instead, e.g.
+  `docker compose exec connector node -p "require('./package.json').version"`.
 
 ### Connector icon in Claude
 

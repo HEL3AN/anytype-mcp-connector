@@ -50,7 +50,7 @@ Claude ──HTTPS──▶ reverse proxy (Caddy or host nginx, TLS) ──▶ c
 | `docs/deploy.md` | Operator guide (setup, proxy overlay, updates, backups) |
 | `README.md`, `SECURITY.md`, `PRIVACY.md`, `CONTRIBUTING.md`, `CHANGELOG.md` | Public docs; keep the tool list in README in sync with `src/tools.ts` |
 
-Stack: Node 24 (Docker; local dev works on 22), TypeScript, Express 5, zod 4,
+Stack: Node 24 (Docker: distroless runtime, uid 1000, no shell — `compose exec connector node …` works via PATH; local dev works on 22), TypeScript, Express 5, zod 4,
 **MCP SDK v2** (`@modelcontextprotocol/server` + `/node`, `createMcpHandler`) serving protocol
 **2026-07-28** (`server/discover`) and, statelessly, 2025-era clients. No dependency on SDK v1: the
 OAuth server is our own code (`src/auth`). Scripts use `@modelcontextprotocol/client` v2.

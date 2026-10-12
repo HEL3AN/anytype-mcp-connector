@@ -3,6 +3,13 @@
 All notable changes to this project. Versions follow [semantic versioning](https://semver.org); images
 are published as `ghcr.io/hel3an/anytype-mcp-connector:<version>`.
 
+## Unreleased
+
+- Container: the runtime image is now distroless Node 24 (Debian 13): no shell, no package manager.
+  It runs as uid 1000 like before, so existing data volumes keep working; `docker compose exec
+  connector node …` (used by `update.sh`) still works.
+- Tests: every tool is named in a test, and a coverage test enforces it for new tools.
+
 ## 0.7.4 — 2026-10-12
 
 - Card: `anytype_show_objects` takes the user's language (`locale`, e.g. `ru`) for dates and labels.
