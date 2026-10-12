@@ -116,6 +116,10 @@ For maximum control, pin `CONNECTOR_IMAGE` to a version you verified instead of 
   chats and comments is marked as reaching other people, and deleting always asks in Claude Code.
 - Threat model and how to report a vulnerability: [SECURITY.md](SECURITY.md).
 
+Independent scan of the published code:
+
+[![M8ven Score](https://m8ven.ai/badge/mcp/hel3an-anytype-mcp-connector-gdfcoq?v=e485272ca7595777732a13482ba77cfb)](https://m8ven.ai/mcp/hel3an-anytype-mcp-connector-gdfcoq?s=readme)
+
 ## Limitations
 
 - Anytype's JSON API v2 is pre-release; the connector pins a tested `anytype-cli` version.
