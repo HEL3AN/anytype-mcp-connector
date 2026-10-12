@@ -3,7 +3,7 @@
 All notable changes to this project. Versions follow [semantic versioning](https://semver.org); images
 are published as `ghcr.io/hel3an/anytype-mcp-connector:<version>`.
 
-## Unreleased
+## 0.8.0 — 2026-10-12
 
 - Container: the runtime image is now distroless Node 24 (Debian 13): no shell, no package manager.
   It runs as uid 1000 like before, so existing data volumes keep working; `docker compose exec
