@@ -567,7 +567,7 @@ describe("interactive card (MCP App)", () => {
     };
     const { tools } = await client.listTools();
     const tool = tools.find((t) => t.name === "anytype_show_objects");
-    assert.deepEqual(tool?._meta?.ui, { resourceUri: "ui://anytype/objects-v4.html" });
+    assert.deepEqual(tool?._meta?.ui, { resourceUri: "ui://anytype/objects-v5.html" });
     assert.equal(tool?.annotations?.readOnlyHint, true);
 
     const res = await client.callTool({ name: "anytype_show_objects", arguments: { space_id: "s", object_ids: ["a", "b", "c", "zz"], title: "Week", locale: "ru" } });
@@ -599,18 +599,20 @@ describe("interactive card (MCP App)", () => {
 
   test("the card resource is an MCP App page with the client inlined (no CDN)", async () => {
     const { resources } = await client.listResources();
-    assert.ok(resources.some((r) => r.uri === "ui://anytype/objects-v4.html"));
-    const res = await client.readResource({ uri: "ui://anytype/objects-v4.html" });
+    assert.ok(resources.some((r) => r.uri === "ui://anytype/objects-v5.html"));
+    const res = await client.readResource({ uri: "ui://anytype/objects-v5.html" });
     const [content] = res.contents as { mimeType: string; text: string; _meta?: { ui?: { csp?: unknown } } }[];
     assert.equal(content?.mimeType, "text/html;profile=mcp-app");
     assert.match(content!.text, /const __ext=\(\(\)=>\{/);
     assert.match(content!.text, /"App":/);
     assert.doesNotMatch(content!.text, /unpkg|jsdelivr|<script[^>]+src=/);
     assert.ok(content!.text.length < 600_000);
+    // Elements toggled with the hidden attribute also get display rules; hidden must win.
+    assert.match(content!.text, /\[hidden\] \{ display: none !important; \}/);
   });
 
   test("the card's module script parses (bundle and page code don't clash)", async () => {
-    const res = await client.readResource({ uri: "ui://anytype/objects-v4.html" });
+    const res = await client.readResource({ uri: "ui://anytype/objects-v5.html" });
     const html = (res.contents[0] as { text: string }).text;
     const script = /<script type="module">([\s\S]*)<\/script>/.exec(html)?.[1];
     assert.ok(script, "module script");

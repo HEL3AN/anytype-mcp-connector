@@ -3,6 +3,11 @@
 All notable changes to this project. Versions follow [semantic versioning](https://semver.org); images
 are published as `ghcr.io/hel3an/anytype-mcp-connector:<version>`.
 
+## 0.8.2 — 2026-10-12
+
+- Card: elements hidden with the `hidden` attribute stayed visible when they also had a display rule
+  ("Show less" on short lists, an empty header on cards without a title).
+
 ## 0.8.1 — 2026-10-12
 
 - Fix: a search narrowed to a type (`type: "task"`) in a space failed with 400 since 0.5.0. The API

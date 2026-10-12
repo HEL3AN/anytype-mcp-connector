@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
 /** Bump the version when the HTML changes: hosts may cache resources by URI. */
-export const OBJECTS_VIEW_URI = "ui://anytype/objects-v4.html";
+export const OBJECTS_VIEW_URI = "ui://anytype/objects-v5.html";
 export const MCP_APP_MIME_TYPE = "text/html;profile=mcp-app";
 /** Tool `_meta` linking a tool to its UI (current key and the legacy flat key). */
 export const objectsViewToolMeta = { ui: { resourceUri: OBJECTS_VIEW_URI }, "ui/resourceUri": OBJECTS_VIEW_URI };
@@ -79,6 +79,7 @@ export function renderObjectsView(bundle: string): string {
     --sm: var(--font-text-sm-size, 13px);
     font-family: var(--font-sans, system-ui, -apple-system, "Segoe UI", sans-serif);
   }
+  [hidden] { display: none !important; }
   html, body { margin: 0; background: transparent; color: var(--fg); font-size: var(--font-text-md-size, 15px); line-height: 1.35; }
   main { padding: 10px 8px 8px; }
   header { display: flex; align-items: baseline; gap: 8px; padding: 0 8px 6px; }

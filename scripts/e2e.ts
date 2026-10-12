@@ -279,7 +279,7 @@ try {
     assert.equal(view.can_edit, true);
     assert.equal(view.objects[0]?.id, object_id);
     assert.match(view.objects[0]!.link, /^anytype:\/\/object\?objectId=.+&spaceId=.+\..+/);
-    const html = await client.readResource({ uri: "ui://anytype/objects-v4.html" });
+    const html = await client.readResource({ uri: "ui://anytype/objects-v5.html" });
     assert.ok((html.contents[0] as { text: string }).text.includes("__ext"), "card HTML");
   });
 } finally {
