@@ -1,6 +1,6 @@
 {
   "name": "anytype-mcp-connector",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Self-hosted remote MCP connector that lets Claude search, read and edit your Anytype workspace",
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -10,7 +10,8 @@
     "smoke": "tsx scripts/smoke.ts",
     "oauth-e2e": "tsx scripts/oauth-e2e.ts",
     "test": "node --import tsx --test --test-reporter=spec \"test/**/*.test.ts\"",
-    "e2e": "tsx scripts/e2e.ts"
+    "e2e": "tsx scripts/e2e.ts",
+    "seed-demo": "tsx scripts/seed-demo.ts"
   },
   "type": "module",
   "dependencies": {

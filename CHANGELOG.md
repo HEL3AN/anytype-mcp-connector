@@ -3,6 +3,15 @@
 All notable changes to this project. Versions follow [semantic versioning](https://semver.org); images
 are published as `ghcr.io/hel3an/anytype-mcp-connector:<version>`.
 
+## 0.8.1 — 2026-10-12
+
+- Fix: a search narrowed to a type (`type: "task"`) in a space failed with 400 since 0.5.0. The API
+  checks requested fields against the type, which has no `snippet`; the connector now retries without
+  the snippet it adds on its own. e2e covers typed searches.
+- `npm run seed-demo`: fills a space with a small fictional workspace (projects, tasks, meeting notes,
+  a collection, a query, a comment) for demos and the directory reviewers; `--clean` removes it.
+- User guide (`docs/user-guide.md`), linked from the README and the home page.
+
 ## 0.8.0 — 2026-10-12
 
 - Container: the runtime image is now distroless Node 24 (Debian 13): no shell, no package manager.

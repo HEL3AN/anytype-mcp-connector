@@ -159,6 +159,32 @@ describe("requests sent to Anytype", () => {
     assert.deepEqual(req?.query, { limit: "2" });
   });
 
+  test("a typed search that rejects the added snippet field is retried without it", async () => {
+    reply = (req) =>
+      (req.body as { fields?: string[] }).fields?.includes("snippet")
+        ? {
+            status: 400,
+            body: {
+              code: "validation_failed",
+              message: "unknown property keys",
+              issues: [{ path: "/fields/0", message: 'unknown property key "snippet" — known property keys: done, due_date' }],
+            },
+          }
+        : { body: { data: [{ id: "t1" }] } };
+    const res = await call("anytype_search", { space_id: "s", type: "task", fields: ["due_date"] });
+    assert.equal(res.isError, false, res.text);
+    assert.deepEqual(JSON.parse(res.text), { data: [{ id: "t1" }] });
+    assert.deepEqual(
+      anytype.requests.map((r) => (r.body as { fields?: string[] }).fields),
+      [["snippet", "due_date"], ["due_date"]],
+    );
+    // Asking for snippet explicitly gets the API's error, not a silent retry.
+    anytype.requests.length = 0;
+    const asked = await call("anytype_search", { space_id: "s", type: "task", fields: ["snippet"] });
+    assert.equal(asked.isError, true);
+    assert.equal(anytype.requests.length, 1);
+  });
+
   test("warnings about the snippet field the connector added are dropped", async () => {
     reply = () => ({
       body: {

@@ -267,6 +267,11 @@ try {
     assert.ok(found, "object appears in search results");
   });
 
+  await step("search narrowed to a type (fields are validated against the type)", async () => {
+    const res = await call("anytype_search", { space_id, type: "page", query: marker, fields: ["last_modified_date"] });
+    assert.ok(res.data.some((o: { id: string }) => o.id === object_id), "typed search finds the page");
+  });
+
   await step("interactive card: show_objects returns the card data", async () => {
     const res = await client.callTool({ name: "anytype_show_objects", arguments: { space_id, object_ids: [object_id], title: "e2e" } });
     assert.ok(!res.isError, resultText(res));

@@ -8,6 +8,7 @@ tools/derive-account-key/derive-account-key
 tools/derive-account-key/*.exe
 data/
 deploy/backups/
+.demo-seed.json
 deploy/nginx/*.conf
 
 # Personal Claude Code files (CLAUDE.local.md: maintainer's private deployment notes)

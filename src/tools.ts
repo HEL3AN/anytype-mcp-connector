@@ -395,10 +395,21 @@ Rows carry a short snippet of the body (properties.snippet). To read several hit
     ({ space_id, limit, offset, ...body }) =>
       run(async () => {
         const path = space_id ? `/v2/spaces/${seg(space_id)}/search` : "/v2/search";
+        const asked = body.fields?.includes("snippet") ?? false;
         const fields = [...new Set(["snippet", ...(body.fields ?? [])])];
-        const res = await api.post<Json>(path, { ...body, fields }, { limit, offset });
+        let res;
+        try {
+          res = await api.post<Json>(path, { ...body, fields }, { limit, offset });
+        } catch (err) {
+          // A search narrowed to a type validates fields against that type, which has no snippet
+          // property: retry without the snippet the connector added on its own.
+          if (asked || !(err instanceof AnytypeApiError) || err.status !== 400 || !JSON.stringify(err.body).includes('\\"snippet\\"')) {
+            throw err;
+          }
+          res = await api.post<Json>(path, { ...body, ...(body.fields?.length ? { fields: body.fields } : {}) }, { limit, offset });
+        }
         // Spaces without a snippet property warn about it; drop that noise unless the caller asked for snippet.
-        if (!body.fields?.includes("snippet") && Array.isArray(res.data.warnings)) {
+        if (!asked && Array.isArray(res.data.warnings)) {
           const { warnings: all, ...rest } = res.data;
           const warnings = (all as ApiIssue[]).filter((w) => !/"snippet"/.test(w.message));
           return ok(warnings.length ? { ...rest, warnings } : rest);
