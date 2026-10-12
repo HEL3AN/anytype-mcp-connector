@@ -45,6 +45,9 @@ Your notes keep syncing with your phone and laptop as usual; the server is just 
 Unlike the official [`anytype-mcp`](https://github.com/anyproto/anytype-mcp) (a local stdio server for
 desktop apps), this one is a **remote** connector, so it also works in the Claude mobile apps.
 
+**Using it:** connecting, what to ask, the task card, read-only access and troubleshooting are in the
+[user guide](docs/user-guide.md).
+
 ## Tools
 
 | Area | Tools |

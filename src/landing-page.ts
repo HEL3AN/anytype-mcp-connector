@@ -59,7 +59,7 @@ export function renderLandingPage(view: {
   <a class="button" href="${installUrl}">Add to Claude</a>
   <p>Or add a custom connector in Claude (Settings → Connectors) with this URL:</p>
   <code>${mcpUrl}</code>
-  <small>v${escapeHtml(view.version)} · <a href="https://github.com/HEL3AN/anytype-mcp-connector">source</a> · <a href="https://github.com/HEL3AN/anytype-mcp-connector/blob/main/PRIVACY.md">privacy</a></small>
+  <small>v${escapeHtml(view.version)} · <a href="https://github.com/HEL3AN/anytype-mcp-connector/blob/main/docs/user-guide.md">guide</a> · <a href="https://github.com/HEL3AN/anytype-mcp-connector">source</a> · <a href="https://github.com/HEL3AN/anytype-mcp-connector/blob/main/PRIVACY.md">privacy</a></small>
 </main>
 </body>
 </html>`;
