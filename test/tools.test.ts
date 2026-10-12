@@ -1,9 +1,10 @@
 // MCP tools end to end through the real MCP stack (createApp, auth disabled) against a fake Anytype API.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { after, before, beforeEach, describe, test } from "node:test";
 import type { Client } from "@modelcontextprotocol/client";
 import { createApp } from "../src/app.js";
@@ -86,6 +87,53 @@ describe("tool list", () => {
     assert.match(text, /space "Work"/);
     assert.match(text, /daysAgo\(14\)/);
     assert.match(text, /anytype_fetch_many/);
+  });
+});
+
+describe("read-only helpers", () => {
+  // tool, arguments → the request it must send (path, query)
+  const cases: [string, Record<string, unknown>, string, Record<string, string>][] = [
+    ["anytype_list_types", { space_id: "s", limit: 5 }, "/v2/spaces/s/types", { limit: "5" }],
+    ["anytype_get_type", { space_id: "s", type: "task" }, "/v2/spaces/s/types/task", {}],
+    ["anytype_list_properties", { space_id: "s", offset: 25 }, "/v2/spaces/s/properties", { offset: "25" }],
+    ["anytype_list_property_options", { space_id: "s", key: "status" }, "/v2/spaces/s/properties/status/options", {}],
+    ["anytype_list_templates", { space_id: "s", type: "task" }, "/v2/spaces/s/templates", { type: "task" }],
+    ["anytype_list_members", { space_id: "s" }, "/v2/spaces/s/members", {}],
+    ["anytype_list_chats", { space_id: "s", limit: 10 }, "/v2/spaces/s/chats", { limit: "10" }],
+    ["anytype_get_op_schema", { op: "add_property" }, "/v2/schemas/ops/add_property", {}],
+    ["anytype_get_schema", { kind: "filters" }, "/v2/schemas/filters", {}],
+    ["anytype_get_schema", {}, "/v2/schemas", {}],
+  ];
+  for (const [tool, args, path, query] of cases) {
+    test(`${tool} ${JSON.stringify(args)} → GET ${path}`, async () => {
+      reply = () => ({ body: { data: [{ id: "x" }] } });
+      const res = await call(tool, args);
+      assert.equal(res.isError, false, res.text);
+      assert.deepEqual(JSON.parse(res.text), { data: [{ id: "x" }] });
+      assert.deepEqual(
+        anytype.requests.map((r) => [r.method, r.path, r.query]),
+        [["GET", path, query]],
+      );
+    });
+  }
+
+  test("get_op_schema accepts only known ops", async () => {
+    const res = await call("anytype_get_op_schema", { op: "drop_everything" });
+    assert.equal(res.isError, true);
+    assert.equal(anytype.requests.length, 0);
+  });
+});
+
+describe("test coverage", () => {
+  test("every tool is named in at least one test (new tools need one)", async () => {
+    const { tools } = await client.listTools();
+    const dir = path.dirname(fileURLToPath(import.meta.url));
+    const sources = readdirSync(dir)
+      .filter((f) => f.endsWith(".test.ts"))
+      .map((f) => readFileSync(path.join(dir, f), "utf8"))
+      .join("\n");
+    const untested = tools.map((t) => t.name).filter((name) => !sources.includes(`"${name}"`));
+    assert.deepEqual(untested, []);
   });
 });
 

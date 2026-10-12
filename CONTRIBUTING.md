@@ -38,6 +38,7 @@ With OAuth (`OWNER_PASSWORD` in `.env.local`), `npm run oauth-e2e` checks the au
 
 - One topic per PR; describe the problem and how you tested it.
 - New behavior comes with tests in `test/` (see `test/helpers.ts`: `fakeAnytype()`, `createApp()`, `serve()`).
+  Every MCP tool must be named in a test: a coverage test fails for a tool no test mentions.
 - New tools need `title` and annotations (`readOnlyHint`, `destructiveHint`, …), a README entry, and a
   mapping in `src/hints.ts` if Anytype's hints can point to them.
 - Keep `npm run typecheck`, `npm test` and `shellcheck deploy/*.sh` green — CI runs them.

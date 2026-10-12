@@ -182,6 +182,7 @@ writes there and refuses any other space. Never point tests at real spaces.
   guidance, and mark tools that post where others read with `openWorldHint: true`.
 - Ids go through `seg()` (refuses `.`/`..`); never build Anytype paths from raw input.
 - New behavior gets a test in `test/` (fake Anytype via `fakeAnytype()`, app via `createApp()` + `serve()`).
+  A coverage test fails for any tool not named in some test (simple GET tools: the table in "read-only helpers").
 - After changing server code: typecheck → `npm test` → `npm run e2e` → commit/push → wait for CI → release
   tag → wait for the Release workflow → `update.sh` on the deployment → `oauth-e2e` against it.
 - Keep `ROADMAP.md` checkboxes and GitHub issues in sync with reality.
