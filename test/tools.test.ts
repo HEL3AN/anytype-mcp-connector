@@ -493,14 +493,15 @@ describe("interactive card (MCP App)", () => {
     };
     const { tools } = await client.listTools();
     const tool = tools.find((t) => t.name === "anytype_show_objects");
-    assert.deepEqual(tool?._meta?.ui, { resourceUri: "ui://anytype/objects-v3.html" });
+    assert.deepEqual(tool?._meta?.ui, { resourceUri: "ui://anytype/objects-v4.html" });
     assert.equal(tool?.annotations?.readOnlyHint, true);
 
-    const res = await client.callTool({ name: "anytype_show_objects", arguments: { space_id: "s", object_ids: ["a", "b", "c", "zz"], title: "Week" } });
+    const res = await client.callTool({ name: "anytype_show_objects", arguments: { space_id: "s", object_ids: ["a", "b", "c", "zz"], title: "Week", locale: "ru" } });
     const search = anytype.requests.find((r) => r.method === "POST");
     assert.deepEqual(search?.body, { filter: 'id IN ("a", "b", "c", "zz")', fields: ["done", "due_date", "status", "tag", "resolved_layout"] });
     assert.deepEqual(res.structuredContent, {
       title: "Week",
+      locale: "ru",
       space_id: "s",
       can_edit: true,
       objects: [
@@ -524,8 +525,8 @@ describe("interactive card (MCP App)", () => {
 
   test("the card resource is an MCP App page with the client inlined (no CDN)", async () => {
     const { resources } = await client.listResources();
-    assert.ok(resources.some((r) => r.uri === "ui://anytype/objects-v3.html"));
-    const res = await client.readResource({ uri: "ui://anytype/objects-v3.html" });
+    assert.ok(resources.some((r) => r.uri === "ui://anytype/objects-v4.html"));
+    const res = await client.readResource({ uri: "ui://anytype/objects-v4.html" });
     const [content] = res.contents as { mimeType: string; text: string; _meta?: { ui?: { csp?: unknown } } }[];
     assert.equal(content?.mimeType, "text/html;profile=mcp-app");
     assert.match(content!.text, /const __ext=\(\(\)=>\{/);
@@ -535,7 +536,7 @@ describe("interactive card (MCP App)", () => {
   });
 
   test("the card's module script parses (bundle and page code don't clash)", async () => {
-    const res = await client.readResource({ uri: "ui://anytype/objects-v3.html" });
+    const res = await client.readResource({ uri: "ui://anytype/objects-v4.html" });
     const html = (res.contents[0] as { text: string }).text;
     const script = /<script type="module">([\s\S]*)<\/script>/.exec(html)?.[1];
     assert.ok(script, "module script");

@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
 /** Bump the version when the HTML changes: hosts may cache resources by URI. */
-export const OBJECTS_VIEW_URI = "ui://anytype/objects-v3.html";
+export const OBJECTS_VIEW_URI = "ui://anytype/objects-v4.html";
 export const MCP_APP_MIME_TYPE = "text/html;profile=mcp-app";
 /** Tool `_meta` linking a tool to its UI (current key and the legacy flat key). */
 export const objectsViewToolMeta = { ui: { resourceUri: OBJECTS_VIEW_URI }, "ui/resourceUri": OBJECTS_VIEW_URI };
@@ -15,6 +15,8 @@ export const objectsViewResourceMeta = { ui: { prefersBorder: true, csp: { resou
 /** What the tool returns in `structuredContent` and the card renders. */
 export interface ObjectsView {
   title?: string;
+  /** The user's language (BCP 47), chosen by the model; wins over the host's locale. */
+  locale?: string;
   space_id: string;
   can_edit: boolean;
   objects: {
@@ -139,7 +141,7 @@ function applyContext(ctx) {
   if (ctx.theme) applyDocumentTheme(ctx.theme);
   if (ctx.styles?.variables) applyHostStyleVariables(ctx.styles.variables);
   if (ctx.styles?.css?.fonts) applyHostFonts(ctx.styles.css.fonts);
-  if (ctx.locale) { locale = ctx.locale; render(); }
+  if (ctx.locale && !view?.locale) { locale = ctx.locale; render(); }
 }
 
 const today = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
@@ -224,7 +226,7 @@ function render() {
 
 $("more").addEventListener("click", () => { expanded = !expanded; render(); });
 app.onhostcontextchanged = applyContext;
-app.ontoolresult = (result) => { view = result.structuredContent || null; expanded = false; render(); };
+app.ontoolresult = (result) => { view = result.structuredContent || null; if (view?.locale) locale = view.locale; expanded = false; render(); };
 await app.connect();
 const ctx = app.getHostContext();
 if (ctx) applyContext(ctx);

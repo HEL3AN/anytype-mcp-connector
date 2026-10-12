@@ -3,6 +3,11 @@
 All notable changes to this project. Versions follow [semantic versioning](https://semver.org); images
 are published as `ghcr.io/hel3an/anytype-mcp-connector:<version>`.
 
+## 0.7.4 — 2026-10-12
+
+- Card: `anytype_show_objects` takes the user's language (`locale`, e.g. `ru`) for dates and labels.
+  Claude didn't pass the interface language to the card, so a Russian chat showed English labels.
+
 ## 0.7.3 — 2026-10-12
 
 - Card: straight inset dividers between rows (the old ones curved at the rounded row corners).

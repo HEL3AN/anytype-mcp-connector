@@ -155,7 +155,12 @@ const optionText = (value: unknown) =>
   Array.isArray(value) ? value.map(String).join(", ") || undefined : typeof value === "string" && value ? value : undefined;
 
 /** Data for the objects card: one search for all rows, plus type names and the full space id for links. */
-async function buildObjectsView(api: AnytypeClient, space_id: string, objectIds: string[], title: string | undefined, canEdit: boolean) {
+async function buildObjectsView(
+  api: AnytypeClient,
+  space_id: string,
+  objectIds: string[],
+  { title, locale, canEdit }: { title?: string; locale?: string; canEdit: boolean },
+) {
   const ids = [...new Set(objectIds)];
   const valid = ids.filter((id) => /^[\w.-]+$/.test(id));
   const base = `/v2/spaces/${seg(space_id)}`;
@@ -174,7 +179,7 @@ async function buildObjectsView(api: AnytypeClient, space_id: string, objectIds:
   const typeNames = new Map((types.data.data ?? []).map((t) => [t.key, t.name ?? t.key]));
   const byId = new Map((rows.data.data ?? []).map((r) => [r.id, r]));
   const fullSpaceId = space.data.id ?? space_id;
-  const view: ObjectsView = { ...(title ? { title } : {}), space_id, can_edit: canEdit, objects: [] };
+  const view: ObjectsView = { ...(title ? { title } : {}), ...(locale ? { locale } : {}), space_id, can_edit: canEdit, objects: [] };
   for (const id of ids) {
     const r = byId.get(id);
     if (!r) {
@@ -1134,15 +1139,20 @@ Use it when the user wants to see or review a set of objects ("show my tasks for
       inputSchema: z.object({
         space_id: spaceId,
         object_ids: z.array(z.string().min(1)).min(1).max(MAX_SHOWN).describe("Objects to show, in display order"),
-        title: z.string().max(200).optional().describe('Card heading, e.g. "Tasks due this week"'),
+        title: z.string().max(200).optional().describe(`Card heading in the user's language, e.g. "Tasks due this week"`),
+        locale: z
+          .string()
+          .regex(/^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$/)
+          .optional()
+          .describe('Language the user writes in (BCP 47, e.g. "ru", "en-US"): dates and labels on the card'),
       }),
       // Hosts show the title (some read it from the annotations) in the card's header.
       annotations: { ...READ_ONLY, title: "Show objects" },
       _meta: objectsViewToolMeta,
     },
-    ({ space_id, object_ids, title }) =>
+    ({ space_id, object_ids, title, locale }) =>
       run(async () => {
-        const view = await buildObjectsView(api, space_id, object_ids, title, !readOnly);
+        const view = await buildObjectsView(api, space_id, object_ids, { title, locale, canEdit: !readOnly });
         return { content: [{ type: "text", text: objectsViewText(view) }], structuredContent: view as unknown as Record<string, unknown> };
       }),
   );
