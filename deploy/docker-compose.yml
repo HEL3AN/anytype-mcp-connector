@@ -13,7 +13,7 @@ x-logging: &logging
 services:
   anytype:
     logging: *logging
-    image: ${ANYTYPE_CLI_IMAGE:-ghcr.io/anyproto/anytype-cli:v0.4.0}
+    image: ${ANYTYPE_CLI_IMAGE:-ghcr.io/anyproto/anytype-cli:v0.5.0}
     command: ["serve", "--listen-address", "0.0.0.0:31012"]
     restart: unless-stopped
     security_opt: [no-new-privileges:true]
