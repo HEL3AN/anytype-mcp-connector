@@ -119,9 +119,13 @@ release, pin its exact tag and run `./update.sh` again. Leave `CONNECTOR_IMAGE` 
 your checkout (for local changes or forks).
 
 
-To update headless Anytype or Caddy, change `ANYTYPE_CLI_IMAGE` / `CADDY_IMAGE` in `deploy/.env` and
-run `./update.sh`. Pin exact versions: an Anytype API key created by a newer anytype-cli does not work
-with an older one.
+Headless Anytype and Caddy versions are set in `docker-compose.yml`: each release ships the versions it
+was tested with, and `./update.sh` moves to them. To hold one back, set `ANYTYPE_CLI_IMAGE` /
+`CADDY_IMAGE` in `deploy/.env` to an exact tag (and remove it later to follow the releases again). An
+Anytype API key created by a newer anytype-cli does not work with an older one.
+
+Deployments set up before 0.8.3 have `ANYTYPE_CLI_IMAGE` pinned in `deploy/.env` (copied from the old
+example); delete that line to follow the tested version.
 
 ## Backups
 
