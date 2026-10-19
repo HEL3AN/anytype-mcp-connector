@@ -34,6 +34,7 @@ Each open item links to a GitHub issue with context and a definition of done.
 - Security audit and hardening (v0.4.0): external-style code review, CodeQL, zizmor, Trivy, OSV,
   Scorecard, npm audit + signatures, govulncheck; SHA-pinned actions, signed provenance attestations,
   hardened containers, prompt-injection guidance, OAuth fixes; Add to Claude button
+- anytype-cli 0.5.0 in production; chat unread counts, comment threads in the chat list, mark as read (v0.9.0) — #10, #12
 - Distroless runtime image (v0.8.0); every tool named in a test (enforced) — #12
 - Interactive card (MCP App): `anytype_show_objects` — tick tasks off, open in Anytype (v0.7.0) — #12
 - Read-only connections: OAuth scopes `anytype:read` / `anytype:write`, chosen on the consent page (v0.6.0) — #12
@@ -43,8 +44,7 @@ Each open item links to a GitHub issue with context and a definition of done.
 ## Next (in order)
 
 1. **Directory** — Anyproto permission, submission materials — #8
-2. **Tool UX leftovers** — chat mark-read and unread counters with the next anytype-cli — #10
-3. **Audit follow-ups** — Node 26 LTS (November), next anytype-cli — #12
+2. **Audit follow-ups** — Node 26 LTS (after 2026-10-28) — #12
 
 ## Known issues
 
