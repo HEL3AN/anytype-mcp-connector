@@ -145,6 +145,10 @@ try {
 
   await step("chats: discussions in the chat list, unread counts, mark as read", async () => {
     const chats = await call("anytype_list_chats", { space_id, include_discussions: true, limit: 100 });
+    if (!chats.data.some((c: { kind?: string }) => c.kind === "discussion")) {
+      console.log("     (skipped: this Anytype predates include=discussions — heart 0.51.6 / anytype-cli 0.5.0)");
+      return;
+    }
     const thread = chats.data.find((c: { parent_id?: string }) => c.parent_id === object_id);
     assert.ok(thread, "the object's discussion is listed");
     assert.equal(typeof thread.unread_messages, "number");
