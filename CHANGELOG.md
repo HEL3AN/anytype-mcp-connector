@@ -3,6 +3,13 @@
 All notable changes to this project. Versions follow [semantic versioning](https://semver.org); images
 are published as `ghcr.io/hel3an/anytype-mcp-connector:<version>`.
 
+## 0.8.3 — 2026-10-19
+
+- Anytype: `deploy/docker-compose.yml` moves to anytype-cli v0.5.0 (anytype-heart 0.51.6: markdown in
+  chat messages, chat status, reconnect after sleep). The API changes are additive; `update.sh` backs up
+  before switching.
+- Runtime image: updated distroless Node 24 base.
+
 ## 0.8.2 — 2026-10-12
 
 - Card: elements hidden with the `hidden` attribute stayed visible when they also had a display rule

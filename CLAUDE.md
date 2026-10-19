@@ -97,8 +97,9 @@ writes there and refuses any other space. Never point tests at real spaces.
   `snippet` on tasks), across spaces unknown fields only warn. The connector's own `snippet` is retried away.
 - Ids are untrusted input from the model: URL parsers resolve `.`/`..` as dot segments, so `seg()`
   refuses them (an object call must never reach another route).
-- anytype-cli v0.4.0 (heart v0.51.3) is current as of 2026-10; heart 0.51.4/0.51.5 (chat status,
-  markdown in v2 chat text, reconnect after sleep) arrive with the next CLI release — re-run e2e then.
+- anytype-cli v0.5.0 (heart v0.51.6, 2026-10-13) is deployed: API v2 only gained ops (chat status,
+  `stream_space_search`/`stream_space_chats` SSE) and `list_chats` `unread`/`include=discussions`; nothing
+  we use changed. Diff the OpenAPI (`core/api/docs/v2/openapi.yaml` per heart tag) before each CLI bump.
 - Chats created through the API record no creating key, so they can't be deleted through the API
   (403 `not_created_by_this_key`): e2e never creates chats. Types and properties can be deleted (e2e cleans
   them up directly); the connector has no delete tool for them, on purpose.
