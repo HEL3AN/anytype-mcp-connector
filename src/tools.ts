@@ -310,9 +310,13 @@ interface ChatMessage {
 
 /** Drops ordering keys, author ids and reaction voters: a model needs who, when and what. */
 function compactMessages(res: { messages?: ChatMessage[] } & Json) {
-  const { messages = [], state: _state, ...rest } = res;
+  const { messages = [], state, ...rest } = res;
+  const unread = state as { unread_messages?: number; unread_mentions?: number } | undefined;
   return {
     ...rest,
+    ...(unread?.unread_messages || unread?.unread_mentions
+      ? { unread: { messages: unread.unread_messages ?? 0, mentions: unread.unread_mentions ?? 0 } }
+      : {}),
     messages: messages.map((m) => ({
       id: m.id,
       at: m.at,
@@ -818,12 +822,30 @@ Get block ids from anytype_fetch with format "outline". Pass if_match (etag from
     "anytype_list_chats",
     {
       title: "List chats",
-      description: "List the chats in a space.",
-      inputSchema: z.object({ space_id: spaceId, limit, offset }),
+      description: `List the chats in a space. Rows carry unread_messages and unread_mentions.
+include_discussions adds the comment threads of objects (parent_id is the object); unread keeps only rows with unread messages or mentions — e.g. "what's new in my chats and comments?". Read one with anytype_read_chat.`,
+      inputSchema: z.object({
+        space_id: spaceId,
+        include_discussions: z.boolean().optional().describe("Also list objects' comment threads"),
+        unread: z.enum(["messages", "mentions"]).optional().describe("Only rows with unread messages / unread mentions"),
+        limit,
+        offset,
+      }),
       annotations: READ_ONLY,
     },
-    ({ space_id, limit, offset }) =>
-      run(async () => ok((await api.get(`/v2/spaces/${seg(space_id)}/chats`, { limit, offset })).data)),
+    ({ space_id, include_discussions, unread, limit, offset }) =>
+      run(async () =>
+        ok(
+          (
+            await api.get(`/v2/spaces/${seg(space_id)}/chats`, {
+              include: include_discussions ? "discussions" : undefined,
+              unread,
+              limit,
+              offset,
+            })
+          ).data,
+        ),
+      ),
   );
 
   server.registerTool(
@@ -867,6 +889,35 @@ Get block ids from anytype_fetch with format "outline". Pass if_match (etag from
   const messageId = z.string().min(1).describe("Message id, from anytype_read_chat or anytype_list_comments");
   const messagePath = (space_id: string, chat_id: string, message_id: string) =>
     `/v2/spaces/${seg(space_id)}/chats/${seg(chat_id)}/messages/${seg(message_id)}`;
+
+  server.registerTool(
+    "anytype_mark_chat_read",
+    {
+      title: "Mark chat as read",
+      description:
+        "Mark everything currently in a chat or comment thread as read for the connector's account (scope messages, or mentions). Only when the user asks for it: it changes what their Anytype apps show as unread.",
+      inputSchema: z.object({
+        space_id: spaceId,
+        chat_id: chatId,
+        scope: z.enum(["messages", "mentions"]).optional().describe("What to mark as read (default messages)"),
+        dry_run: dryRun,
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    ({ space_id, chat_id, scope = "messages", dry_run }) =>
+      run(async () => {
+        const chat = `/v2/spaces/${seg(space_id)}/chats/${seg(chat_id)}`;
+        // The read marker needs the newest message's order and the chat state's id, from one read.
+        const latest = await api.get<{ messages?: { order?: string }[]; state?: { last_state_id?: string } }>(`${chat}/messages`, {
+          limit: 1,
+        });
+        const upTo = latest.data.messages?.at(-1)?.order;
+        const stateId = latest.data.state?.last_state_id;
+        if (!upTo || !stateId) return ok({ marked: false, reason: "the chat has no messages" });
+        const res = await api.post(`${chat}/read`, { scope, up_to: upTo, last_state_id: stateId }, { dry_run });
+        return ok({ marked: !dry_run, ...(res.data && typeof res.data === "object" ? (res.data as Json) : {}) });
+      }),
+  );
 
   server.registerTool(
     "anytype_edit_chat_message",

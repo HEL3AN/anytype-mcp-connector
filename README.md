@@ -55,7 +55,7 @@ desktop apps), this one is a **remote** connector, so it also works in the Claud
 | Find & read | `anytype_list_spaces`, `anytype_search` (full text, type, compact filters like `done = false AND due_date < currentWeek()`), `anytype_fetch` (markdown, outline or blocks; pages long bodies; lists backlinks), `anytype_fetch_many` (up to 10 objects in one call); search rows carry a snippet |
 | Edit | `anytype_create_object` (markdown body), `anytype_edit_object` (atomic ops: replace text, insert markdown, set properties, …, with `dry_run` and ETag checks), `anytype_delete_object` |
 | Collections & sets | `anytype_list_items`, `anytype_list_views`, `anytype_create_collection`, `anytype_create_query` |
-| Comments & chats | `anytype_list_comments`, `anytype_add_comment`, `anytype_list_chats`, `anytype_read_chat`, `anytype_send_chat_message`, `anytype_edit_chat_message`, `anytype_delete_chat_message`, `anytype_react_to_message`, `anytype_create_chat` |
+| Comments & chats | `anytype_list_comments`, `anytype_add_comment`, `anytype_list_chats` (with comment threads and unread counts), `anytype_read_chat`, `anytype_send_chat_message`, `anytype_edit_chat_message`, `anytype_delete_chat_message`, `anytype_react_to_message`, `anytype_mark_chat_read`, `anytype_create_chat` |
 | Files | `anytype_upload_file` (from a public URL; embed with `![caption](<file id>)`), `anytype_get_file` (images come back as images, text files as text) |
 | Spaces | `anytype_get_space`, `anytype_update_space` (name, description) |
 | Show | `anytype_show_objects`: an interactive card in the chat (claude.ai, desktop, mobile) — tick tasks off, tap to open in Anytype; other clients get the same list as text |

@@ -41,7 +41,7 @@ async function call(name: string, args: Record<string, unknown> = {}) {
 describe("tool list", () => {
   test("every tool has a title and read-only/destructive hints (directory requirement)", async () => {
     const { tools } = await client.listTools();
-    assert.equal(tools.length, 37);
+    assert.equal(tools.length, 38);
     for (const tool of tools) {
       assert.ok(tool.title ?? tool.annotations?.title, `${tool.name} has a title`);
       assert.equal(typeof tool.annotations?.readOnlyHint, "boolean", `${tool.name} readOnlyHint`);
@@ -60,6 +60,7 @@ describe("tool list", () => {
       "anytype_delete_object",
       "anytype_edit_chat_message",
       "anytype_edit_object",
+      "anytype_mark_chat_read",
       "anytype_react_to_message",
       "anytype_send_chat_message",
       "anytype_update_property",
@@ -749,6 +750,39 @@ describe("comments and chats", () => {
     assert.deepEqual(anytype.requests[0]?.query, { before: "!#" });
     await call("anytype_send_chat_message", { space_id: "s", chat_id: "c", text: "hi", attachments: ["o1"] });
     assert.deepEqual(anytype.requests[1]?.body, { text: "hi", attachments: ["o1"] });
+  });
+
+  test("list_chats can add discussions and keep only unread rows", async () => {
+    await call("anytype_list_chats", { space_id: "s", include_discussions: true, unread: "mentions" });
+    assert.deepEqual(anytype.requests[0]?.query, { include: "discussions", unread: "mentions" });
+  });
+
+  test("read_chat surfaces unread counts from the chat state", async () => {
+    reply = () => ({ body: { messages: [], state: { unread_messages: 3, unread_mentions: 1, last_state_id: "st" } } });
+    const res = JSON.parse((await call("anytype_read_chat", { space_id: "s", chat_id: "c" })).text);
+    assert.deepEqual(res.unread, { messages: 3, mentions: 1 });
+    assert.equal(res.state, undefined);
+  });
+
+  test("mark_chat_read marks up to the newest message with the chat state's id", async () => {
+    reply = (req) =>
+      req.method === "GET"
+        ? { body: { messages: [{ id: "m9", order: "!!%9" }], state: { last_state_id: "st7" } } }
+        : { body: { state: { unread_messages: 0 } } };
+    const res = await call("anytype_mark_chat_read", { space_id: "s", chat_id: "c" });
+    assert.equal(res.isError, false, res.text);
+    assert.deepEqual(JSON.parse(res.text), { marked: true, state: { unread_messages: 0 } });
+    assert.deepEqual(anytype.requests.map((r) => [r.method, r.path, r.query, r.body]), [
+      ["GET", "/v2/spaces/s/chats/c/messages", { limit: "1" }, undefined],
+      ["POST", "/v2/spaces/s/chats/c/read", {}, { scope: "messages", up_to: "!!%9", last_state_id: "st7" }],
+    ]);
+  });
+
+  test("mark_chat_read on an empty chat marks nothing", async () => {
+    reply = () => ({ body: { messages: [], state: {} } });
+    const res = JSON.parse((await call("anytype_mark_chat_read", { space_id: "s", chat_id: "c", scope: "mentions" })).text);
+    assert.equal(res.marked, false);
+    assert.equal(anytype.requests.length, 1);
   });
 });
 

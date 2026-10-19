@@ -29,6 +29,7 @@ To change the access level later, disconnect the connector in Claude's settings 
 - *"Turn the action items from yesterday's meeting notes into tasks."*
 - *"Make a collection of everything I wrote about the garden this year."*
 - *"Reply to the comments on the onboarding doc."*
+- *"What's new in my chats and comments? Mark the bakery thread as read."*
 - *"Create a Meeting type with attendees, a date and a room."*
 
 Claude finds objects with full-text search and filters (type, status, tags, dates), reads several

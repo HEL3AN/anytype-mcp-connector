@@ -3,6 +3,17 @@
 All notable changes to this project. Versions follow [semantic versioning](https://semver.org); images
 are published as `ghcr.io/hel3an/anytype-mcp-connector:<version>`.
 
+## 0.9.0 — 2026-10-19
+
+New with anytype-cli 0.5.0 (anytype-heart 0.51.6):
+
+- `anytype_list_chats`: rows carry unread message and mention counts; `include_discussions` adds the
+  comment threads of objects and `unread` keeps only threads with something new ("what's new in my
+  chats and comments?").
+- `anytype_read_chat` shows the chat's unread counts.
+- `anytype_mark_chat_read`: marks a chat or comment thread as read (only when the user asks).
+- Chat messages and comments written in markdown now render as markdown in Anytype.
+
 ## 0.8.3 — 2026-10-19
 
 - Anytype: `deploy/docker-compose.yml` moves to anytype-cli v0.5.0 (anytype-heart 0.51.6: markdown in

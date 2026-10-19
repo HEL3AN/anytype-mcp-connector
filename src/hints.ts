@@ -43,6 +43,7 @@ const OP_TOOLS: Record<string, { tool: string; rename?: Record<string, string> }
   list_chats: { tool: "anytype_list_chats" },
   get_chat_messages: { tool: "anytype_read_chat" },
   add_chat_message: { tool: "anytype_send_chat_message" },
+  read_chat: { tool: "anytype_mark_chat_read" },
   edit_chat_message: { tool: "anytype_edit_chat_message" },
   delete_chat_message: { tool: "anytype_delete_chat_message" },
   toggle_chat_reaction: { tool: "anytype_react_to_message" },

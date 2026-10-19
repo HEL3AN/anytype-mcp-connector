@@ -32,7 +32,7 @@ Claude ──HTTPS──▶ reverse proxy (Caddy or host nginx, TLS) ──▶ c
 | `src/index.ts` | Entry point: loads `.env*`, `loadConfig()`, `createApp()`, listen, graceful shutdown |
 | `src/app.ts` | `createApp(config, {api?, cimdResolver?, log?})`: host validation, request log, `/`, icons, `/healthz`, `/readyz`, OAuth routes, `/mcp` |
 | `src/config.ts` | `loadConfig(env)` — pure, validated; `loadEnvFiles()` |
-| `src/tools.ts` | All 37 MCP tools (Anytype API v2): search/fetch/edit, collections & queries, comments & chats, files, spaces, types & properties, templates, members. Compact JSON output, `next_offset`, markdown paging. Tool annotations are required for the directory |
+| `src/tools.ts` | All 38 MCP tools (Anytype API v2): search/fetch/edit, collections & queries, comments & chats, files, spaces, types & properties, templates, members. Compact JSON output, `next_offset`, markdown paging. Tool annotations are required for the directory |
 | `src/objects-view.ts` | MCP App for `anytype_show_objects`: `ui://` HTML card with the ext-apps client bundle inlined (its `export{}` list rewritten to a local object) |
 | `src/prompts.ts` | MCP prompts (canned workflows: weekly review, meeting notes → tasks, topic brief) |
 | `src/hints.ts` | Turns Anytype errors/warnings (`issues[].hint` + `see_also` operationIds) into text with the next **tool** call |

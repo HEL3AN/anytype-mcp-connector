@@ -143,6 +143,17 @@ try {
     assert.deepEqual(after.messages[0].reactions, { "👍": 1 });
   });
 
+  await step("chats: discussions in the chat list, unread counts, mark as read", async () => {
+    const chats = await call("anytype_list_chats", { space_id, include_discussions: true, limit: 100 });
+    const thread = chats.data.find((c: { parent_id?: string }) => c.parent_id === object_id);
+    assert.ok(thread, "the object's discussion is listed");
+    assert.equal(typeof thread.unread_messages, "number");
+    const marked = await call("anytype_mark_chat_read", { space_id, chat_id: thread.id });
+    assert.equal(marked.marked, true, JSON.stringify(marked));
+    const unread = await call("anytype_list_chats", { space_id, include_discussions: true, unread: "messages", limit: 100 });
+    assert.ok(!unread.data.some((c: { id: string }) => c.id === thread.id), "no longer unread");
+  });
+
   await step("space: get", async () => {
     const got = await call("anytype_get_space", { space_id });
     assert.equal(got.name, spaceName);
