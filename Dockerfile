@@ -11,7 +11,7 @@ COPY src ./src
 RUN npm run build && npm prune --omit=dev && mkdir -p /data
 
 # Runtime: distroless Node (no shell, no package manager, minimal OS packages).
-FROM gcr.io/distroless/nodejs24-debian13@sha256:96df910f65fdd8a21d00d14d4cc046adcfcf3ced2d5e96be4b39ebde9f4866c6
+FROM gcr.io/distroless/nodejs24-debian13@sha256:9ddd3f7de61d8c62337cdcbeaceb621de5e0c955ccdc70f4c3586db74a8c278f
 LABEL org.opencontainers.image.source="https://github.com/HEL3AN/anytype-mcp-connector" \
       org.opencontainers.image.description="Remote MCP server that connects Claude to Anytype" \
       org.opencontainers.image.licenses="MIT"
