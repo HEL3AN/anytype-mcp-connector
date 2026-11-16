@@ -2,7 +2,7 @@
 
 # The build stage runs on the builder's native platform: the output (dist + production node_modules)
 # is plain JavaScript (no native modules), so it is identical for every target architecture.
-FROM --platform=$BUILDPLATFORM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS build
+FROM --platform=$BUILDPLATFORM node:24-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
