@@ -13,6 +13,31 @@ export interface ClientMetadataDocument {
 }
 
 export class CimdError extends Error {}
+/** The document could not be fetched at all (network, timeout, non-200), as opposed to an invalid one. */
+class CimdFetchError extends CimdError {}
+
+/**
+ * Copies of Claude's own metadata documents (fetched 2026-11-16). Used only when claude.ai can't be
+ * reached: its Cloudflare front sometimes challenges server IPs (seen on VPN exits) and some regions
+ * get a geo redirect, which would otherwise lock the owner out of connecting. A live document always
+ * wins, and the host must still be trusted.
+ */
+export const KNOWN_CLIENTS: Record<string, ClientMetadataDocument> = {
+  "https://claude.ai/oauth/mcp-oauth-client-metadata": {
+    client_id: "https://claude.ai/oauth/mcp-oauth-client-metadata",
+    client_name: "Claude",
+    client_uri: "https://claude.ai",
+    redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
+    token_endpoint_auth_method: "none",
+  },
+  "https://claude.ai/oauth/claude-code-client-metadata": {
+    client_id: "https://claude.ai/oauth/claude-code-client-metadata",
+    client_name: "Claude Code",
+    client_uri: "https://claude.ai",
+    redirect_uris: ["http://localhost/callback", "http://127.0.0.1/callback"],
+    token_endpoint_auth_method: "none",
+  },
+};
 
 const MAX_BYTES = 64 * 1024;
 const FETCH_TIMEOUT_MS = 5_000;
@@ -54,9 +79,23 @@ export class CimdResolver {
       return doc;
     } catch (err) {
       const error = err instanceof CimdError ? err : new CimdError(String(err));
+      // Unreachable (not invalid): reuse the last good copy, else a bundled one for Claude's clients.
+      const fallback = error instanceof CimdFetchError ? (cached?.doc ?? this.knownClient(clientId)) : undefined;
+      if (fallback) {
+        console.warn(`CIMD fetch failed for ${JSON.stringify(clientId)} (${error.message}); using the ${cached ? "last fetched" : "bundled"} document`);
+        remember(this.cache, clientId, { doc: fallback, expiresAt: Date.now() + FAILURE_TTL_MS });
+        return fallback;
+      }
       remember(this.failures, clientId, { error, expiresAt: Date.now() + FAILURE_TTL_MS });
       throw error;
     }
+  }
+
+  private knownClient(clientId: string): ClientMetadataDocument | undefined {
+    const doc = KNOWN_CLIENTS[clientId];
+    if (!doc) return undefined;
+    const host = new URL(clientId).hostname;
+    return this.trustedHosts.includes("*") || this.trustedHosts.includes(host) ? doc : undefined;
   }
 
   private async fetchDocument(clientId: string): Promise<ClientMetadataDocument> {
@@ -72,9 +111,9 @@ export class CimdResolver {
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
     } catch (err) {
-      throw new CimdError(`could not fetch client metadata: ${err instanceof Error ? err.message : err}`);
+      throw new CimdFetchError(`could not fetch client metadata: ${err instanceof Error ? err.message : err}`);
     }
-    if (res.status !== 200) throw new CimdError(`client metadata URL answered ${res.status}`);
+    if (res.status !== 200) throw new CimdFetchError(`client metadata URL answered ${res.status}`);
 
     const doc = validateDocument(clientId, await readJson(res));
     remember(this.cache, clientId, { doc, expiresAt: Date.now() + cacheTtl(res.headers.get("cache-control")) });

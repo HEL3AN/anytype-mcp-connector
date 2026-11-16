@@ -3,6 +3,17 @@
 All notable changes to this project. Versions follow [semantic versioning](https://semver.org); images
 are published as `ghcr.io/hel3an/anytype-mcp-connector:<version>`.
 
+## 0.9.1 — 2026-11-16
+
+- OAuth: when claude.ai can't serve its client metadata document (Cloudflare challenges some server
+  and VPN exit IPs; some regions get a geo redirect), the connector reuses the last document it fetched,
+  or a bundled copy for Claude's own two clients (claude.ai/desktop/mobile and Claude Code), instead of
+  refusing the connection. Invalid documents and other clients are still refused.
+- Security updates: hono, @hono/node-server, body-parser, ip-address, qs, zod; MCP SDK 2.4.0,
+  ext-apps 2.0.4, express 5.3.0.
+- Anytype: anytype-cli v0.5.2 (same anytype-heart 0.51.6; release packaging fixes only).
+- Base images and CI actions updated.
+
 ## 0.9.0 — 2026-10-19
 
 New with anytype-cli 0.5.0 (anytype-heart 0.51.6):

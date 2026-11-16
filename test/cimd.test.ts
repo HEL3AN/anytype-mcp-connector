@@ -1,10 +1,13 @@
 // Client ID Metadata Document resolver: URL policy, SSRF guard, document validation, limits, cache.
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { CimdResolver, isCimdClientId, isPublicAddress } from "../src/auth/cimd.js";
+import { CimdResolver, isCimdClientId, isPublicAddress, KNOWN_CLIENTS } from "../src/auth/cimd.js";
 
 const ID = "https://claude.ai/oauth/mcp-oauth-client-metadata";
 const DOC = { client_id: ID, client_name: "Claude", redirect_uris: ["https://claude.ai/api/mcp/auth_callback"] };
+/** A trusted host but no bundled copy: fetch failures stay failures. */
+const OTHER = "https://claude.ai/oauth/some-other-client";
+const OTHER_DOC = { ...DOC, client_id: OTHER };
 
 /** Resolver with a fake fetch that serves `body` (or a Response factory) and counts calls. */
 function resolver(body: unknown = DOC, { hosts = ["claude.ai"], addresses = ["160.79.104.10"] } = {}) {
@@ -118,15 +121,15 @@ describe("CimdResolver", () => {
       [() => new Response("", { status: 302, headers: { Location: "https://evil.example.test/" } }), /answered 302/],
       [() => new Response("nope", { status: 404 }), /answered 404/],
       [() => new Response("{not json"), /not valid JSON/],
-      [() => new Response(JSON.stringify({ ...DOC, pad: "x".repeat(70_000) })), /too large/],
+      [() => new Response(JSON.stringify({ ...OTHER_DOC, pad: "x".repeat(70_000) })), /too large/],
     ];
-    for (const [answer, message] of answers) await assert.rejects(resolver(answer).r.resolve(ID), message);
+    for (const [answer, message] of answers) await assert.rejects(resolver(answer).r.resolve(OTHER), message);
   });
 
   test("failures are cached briefly, so retries don't refetch", async () => {
     const { r, calls } = resolver(() => new Response("nope", { status: 404 }));
-    await assert.rejects(r.resolve(ID), /answered 404/);
-    await assert.rejects(r.resolve(ID), /answered 404/);
+    await assert.rejects(r.resolve(OTHER), /answered 404/);
+    await assert.rejects(r.resolve(OTHER), /answered 404/);
     assert.equal(calls.length, 1);
   });
 
@@ -135,5 +138,46 @@ describe("CimdResolver", () => {
     await r.resolve(ID);
     await r.resolve(ID);
     assert.equal(calls.length, 1);
+  });
+});
+
+describe("CimdResolver fallback when claude.ai is unreachable", () => {
+  const challenge = () => new Response("<title>Just a moment...</title>", { status: 403 });
+
+  test("Claude's own clients fall back to the bundled documents", async () => {
+    for (const id of Object.keys(KNOWN_CLIENTS)) {
+      const doc = await resolver(challenge).r.resolve(id);
+      assert.deepEqual(doc, KNOWN_CLIENTS[id]);
+    }
+    const timeout = resolver(() => {
+      throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    });
+    assert.equal((await timeout.r.resolve(ID)).client_name, "Claude");
+  });
+
+  test("bundled documents keep the redirect URIs Claude registers", () => {
+    assert.deepEqual(KNOWN_CLIENTS[ID]?.redirect_uris, ["https://claude.ai/api/mcp/auth_callback"]);
+    for (const [id, doc] of Object.entries(KNOWN_CLIENTS)) assert.equal(doc.client_id, id);
+  });
+
+  test("the last fetched document wins over the bundled one", async () => {
+    let up = true;
+    const live = { ...DOC, client_name: "Claude (live)" };
+    const { r } = resolver(() => (up ? Response.json(live, { headers: { "Cache-Control": "max-age=0" } }) : challenge()));
+    await r.resolve(ID);
+    up = false;
+    const realNow = Date.now;
+    Date.now = () => realNow() + 2 * 60 * 1000; // past the cache entry
+    try {
+      assert.equal((await r.resolve(ID)).client_name, "Claude (live)");
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  test("no fallback for invalid documents, unknown clients or untrusted hosts", async () => {
+    await assert.rejects(resolver({ ...DOC, client_id: "https://claude.ai/x" }).r.resolve(ID), /does not match/);
+    await assert.rejects(resolver(challenge).r.resolve(OTHER), /answered 403/);
+    await assert.rejects(resolver(challenge, { hosts: ["claude.com"] }).r.resolve(ID), /not trusted/);
   });
 });

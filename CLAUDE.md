@@ -131,6 +131,9 @@ writes there and refuses any other space. Never point tests at real spaces.
   (redirect `https://claude.ai/api/mcp/auth_callback`), Claude Code `https://claude.ai/oauth/claude-code-client-metadata`.
 - claude.ai answers some regions (e.g. Russian IPs) with a 302 geo redirect, which breaks CIMD fetches:
   there the connector must use the proxy overlay too (it shares egress's network namespace).
+- claude.ai's Cloudflare front can also answer CIMD fetches with a 403 challenge (`cf-mitigated:
+  challenge`) for VPN/datacenter exit IPs (seen 2026-11-16). `src/auth/cimd.ts` then falls back to the
+  last fetched document or the bundled `KNOWN_CLIENTS` copies; refresh them if Claude's documents change.
 - `oauth-e2e` against a deployment shares your IP with the owner's browser; the consent limiter counts only
   failures, but don't loop it.
 - Claude caches discovery metadata ~5 min.
